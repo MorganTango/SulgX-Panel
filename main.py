@@ -2003,6 +2003,9 @@ setLang(lang);
 </body>
 </html>"""
 
+from urllib.parse import quote
+from python_socks.async_.asyncio import Proxy
+
 async def create_proxied_connection(address, port, link):
     proxy_line_id = link.get("proxy_line_id")
     if not proxy_line_id:
@@ -2024,9 +2027,13 @@ async def create_proxied_connection(address, port, link):
     password = proxy_row.get("password")
 
     try:
-        proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
-        if username:
-            proxy = proxy.with_auth(username, password)
+        auth_str = ""
+        if username and password:
+            safe_user = quote(username)
+            safe_pass = quote(password)
+            auth_str = f"{safe_user}:{safe_pass}@"
+        proxy_url = f"{proxy_type}://{auth_str}{proxy_host}:{proxy_port}"
+        proxy = Proxy.from_url(proxy_url)
         logger.info(f"Attempting proxied connection to {address}:{port} via {proxy_type}://{proxy_host}:{proxy_port}")
         sock = await proxy.connect(dest_host=address, dest_port=port)
         reader, writer = await asyncio.open_connection(sock=sock)
