@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconn
 from fastapi.responses import Response, HTMLResponse, JSONResponse, StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from python_socks.async_.asyncio import Proxy
 
 import uvicorn
 import httpx
@@ -717,9 +718,12 @@ async def save_subs():
 async def load_initial_data():
     global DEFAULT_PATH, DOH_ENABLED, DEFAULT_XHTTP_PATH
     rows = await db_fetchall("SELECT * FROM links", "SELECT * FROM links")
-    async with LINKS_LOCK:
-        for r in rows:
-            LINKS[r["uid"]] = dict(r)
+async with LINKS_LOCK:
+    for r in rows:
+        link_dict = dict(r)
+        if "proxy_line_id" not in link_dict:
+            link_dict["proxy_line_id"] = None
+        LINKS[r["uid"]] = link_dict
     addr_rows = await db_fetchall("SELECT address, flag FROM custom_addresses", "SELECT address, flag FROM custom_addresses")
     async with CUSTOM_ADDRESSES_LOCK:
         CUSTOM_ADDRESSES[:] = [r["address"] for r in addr_rows]
@@ -1326,7 +1330,8 @@ async def telegram_webhook(request: Request):
                         "fragment_mode": "off", "fragment_length": "100-200", "fragment_interval": "10-20",
                         "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
                         "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
-                        "fingerprint": "chrome", "alpn": "", "port": 443
+                        "fingerprint": "chrome", "alpn": "", "port": 443,
+                        "proxy_line_id": None
                     }
                     async with LINKS_LOCK:
                         LINKS[uid] = link_data
@@ -2005,6 +2010,7 @@ async def create_proxied_connection(address, port, link):
         (proxy_line_id,)
     )
     if not proxy_row or not proxy_row["is_active"]:
+        logger.warning(f"Proxy {proxy_line_id} not found or inactive, falling back to direct")
         return await asyncio.open_connection(address, port)
 
     proxy_type = proxy_row["type"]
@@ -2013,13 +2019,18 @@ async def create_proxied_connection(address, port, link):
     username = proxy_row.get("username")
     password = proxy_row.get("password")
 
-    proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
-    if username:
-        proxy = proxy.with_auth(username, password)
-
-    sock = await proxy.connect(dest_host=address, dest_port=port)
-    reader, writer = await asyncio.open_connection(sock=sock)
-    return reader, writer
+    try:
+        proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
+        if username:
+            proxy = proxy.with_auth(username, password)
+        logger.info(f"Attempting proxied connection to {address}:{port} via {proxy_type}://{proxy_host}:{proxy_port}")
+        sock = await proxy.connect(dest_host=address, dest_port=port)
+        reader, writer = await asyncio.open_connection(sock=sock)
+        tune_socket(writer)
+        return reader, writer
+    except Exception as e:
+        logger.error(f"Proxy connection failed for {proxy_type}://{proxy_host}:{proxy_port} -> {address}:{port} : {e}")
+        raise
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root(request: Request):
@@ -2668,11 +2679,12 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
             fingerprint = link.get("fingerprint", "chrome")
             alpn = link.get("alpn", "")
             port = int(link.get("port") or 443)
+            proxy_line_id = link.get("proxy_line_id")
             await db_execute(
-    "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)",
-    (uid, label, limit_bytes, 0, max_conn, now, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port),
-)
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
+                (uid, label, limit_bytes, 0, max_conn, created_at, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id),
+            )
             async with LINKS_LOCK:
                 LINKS[uid] = {
                     "uid": uid, "label": label, "limit_bytes": limit_bytes, "used_bytes": used_bytes,
@@ -2685,10 +2697,10 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
                     "allow_insecure": allow_insecure, "random_path": random_path, "enable_ipv6": enable_ipv6,
                     "smux_enabled": smux_enabled, "ip_limit": ip_limit,
                     "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
+                    "proxy_line_id": proxy_line_id
                 }
     return {"ok": True}
 
-# ------------------ Proxy Lines API ------------------
 @app.get("/api/proxy-lines")
 async def list_proxy_lines(_=Depends(require_auth)):
     rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
@@ -2709,7 +2721,6 @@ async def create_proxy_line(request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=400, detail="Host and valid port are required")
     username = body.get("username", "")
     password = body.get("password", "")
-
     await db_execute(
         "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES (?,?,?,?,?,?)",
         "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES ($1,$2,$3,$4,$5,$6)",
@@ -2778,7 +2789,6 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
         logger.error(f"Proxy test failed for id={pid}: {e}")
         raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
 
-# ------------------ Inbound Management (modified for proxy) ------------------
 @app.post("/api/links")
 @limiter.limit("10/minute")
 async def create_link(request: Request, _=Depends(require_auth)):
@@ -3062,11 +3072,12 @@ async def import_links(request: Request, _=Depends(require_auth)):
                 "allow_insecure": allow_insecure, "random_path": random_path, "enable_ipv6": enable_ipv6,
                 "smux_enabled": smux_enabled, "ip_limit": ip_limit,
                 "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
+                "proxy_line_id": item.get("proxy_line_id")
             }
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)",
-            (uid_input, label, limit_bytes, used_bytes, max_conn, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port),
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
+            (uid_input, label, limit_bytes, used_bytes, max_conn, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, item.get("proxy_line_id")),
         )
         imported += 1
     return {"ok": True, "imported": imported}
@@ -3276,14 +3287,13 @@ async def clone_link(uid: str, _=Depends(require_auth)):
         new_link["created_at"] = datetime.now(timezone.utc).isoformat()
         LINKS[new_uid] = new_link
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32)",
-            (new_uid, new_link["label"], new_link["limit_bytes"], 0, new_link["max_connections"], new_link["created_at"], 1, new_link.get("expires_at"), new_link.get("custom_path", ""), new_link.get("custom_sni", ""), new_link.get("custom_host", ""), new_link.get("custom_fp", "chrome"), new_link.get("color", "#39ff14"), new_link.get("flag", ""), new_link.get("fragment", ""), new_link.get("ip_profile_id", ""), new_link.get("naming_mode", "default"), new_link.get("tfo", 0), new_link.get("ech_enabled", 0), new_link.get("ech_sni", ""), new_link.get("ech_doh", ""), new_link.get("fragment_mode", "off"), new_link.get("fragment_length", "100-200"), new_link.get("fragment_interval", "10-20"), new_link.get("allow_insecure", 0), new_link.get("random_path", 0), new_link.get("enable_ipv6", 1), new_link.get("smux_enabled", 0), new_link.get("ip_limit", 0), new_link.get("protocol", "vless-ws"), new_link.get("fingerprint", "chrome"), new_link.get("alpn", ""), new_link.get("port", 443)),
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
+            (new_uid, new_link["label"], new_link["limit_bytes"], 0, new_link["max_connections"], new_link["created_at"], 1, new_link.get("expires_at"), new_link.get("custom_path", ""), new_link.get("custom_sni", ""), new_link.get("custom_host", ""), new_link.get("custom_fp", "chrome"), new_link.get("color", "#39ff14"), new_link.get("flag", ""), new_link.get("fragment", ""), new_link.get("ip_profile_id", ""), new_link.get("naming_mode", "default"), new_link.get("tfo", 0), new_link.get("ech_enabled", 0), new_link.get("ech_sni", ""), new_link.get("ech_doh", ""), new_link.get("fragment_mode", "off"), new_link.get("fragment_length", "100-200"), new_link.get("fragment_interval", "10-20"), new_link.get("allow_insecure", 0), new_link.get("random_path", 0), new_link.get("enable_ipv6", 1), new_link.get("smux_enabled", 0), new_link.get("ip_limit", 0), new_link.get("protocol", "vless-ws"), new_link.get("fingerprint", "chrome"), new_link.get("alpn", ""), new_link.get("port", 443), new_link.get("proxy_line_id")),
         )
         log_event("Inbound", f"Cloned inbound {uid} -> {new_uid}")
         return {"new_uuid": new_uid, "label": new_link["label"]}
 
-# ------------------ Clean IP Addresses ------------------
 @app.get("/api/addresses")
 async def list_addresses(_=Depends(require_auth)):
     async with CUSTOM_ADDRESSES_LOCK:
@@ -3422,7 +3432,6 @@ async def bulk_delete_addresses(request: Request, _=Depends(require_auth)):
     log_event("Clean IP", "Bulk deleted addresses")
     return {"ok": True}
 
-# ------------------ IP Profiles ------------------
 @app.get("/api/ip-profiles")
 async def get_ip_profiles(_=Depends(require_auth)):
     async with IP_PROFILES_LOCK:
@@ -3554,7 +3563,6 @@ async def remove_profile_address(pid: str, request: Request, _=Depends(require_a
         )
     return {"ok": True}
 
-# ------------------ Flag & DoH ------------------
 @app.get("/api/auto-flag/{ip}")
 async def auto_flag(ip: str):
     flag = await fetch_ip_flag(ip)
@@ -3704,7 +3712,6 @@ async def doh_handler(request: Request):
             return Response(content=result, media_type="application/dns-message")
     return Response("All upstreams failed", status_code=502)
 
-# ------------------ HTTP Proxy (Secure + Streaming) ------------------
 _HOP_BY_HOP = {"connection","keep-alive","proxy-authenticate","proxy-authorization",
                "te","trailers","transfer-encoding","upgrade","content-encoding","content-length"}
 
@@ -3788,7 +3795,6 @@ async def http_proxy(target_url: str, request: Request, _=Depends(require_auth))
         })
         raise HTTPException(status_code=502, detail=f"Proxy error: {e}")
 
-# ------------------ Blocked Domains API ------------------
 @app.get("/api/blocked-domains")
 async def get_blocked_domains(_=Depends(require_auth)):
     row = await db_fetchone("SELECT value FROM settings WHERE key='blocked_domains'",
@@ -3810,7 +3816,6 @@ async def update_blocked_domains(request: Request, _=Depends(require_auth)):
     BLOCKED_DOMAINS.update(d.strip().lower() for d in domains if d.strip())
     return {"ok": True}
 
-# ------------------ Subscription Groups (SUBS) ------------------
 @app.post("/api/subs")
 async def create_sub(request: Request, _=Depends(require_auth)):
     body = await request.json()
@@ -3887,7 +3892,6 @@ async def sub_group_subscription(uuid_key: str, request: Request):
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(content=content, media_type="text/plain")
 
-# ---------- User Dashboard (before subscription endpoints) ----------
 @app.get("/user/{uid}")
 async def user_dashboard(uid: str, request: Request):
     async with LINKS_LOCK:
@@ -8676,6 +8680,7 @@ async function createLink(){
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
+
 async function showEditMo(uid) {
   const l = allLinks.find(x => x.uuid === uid);
   if (!l) return;
@@ -10330,9 +10335,8 @@ async function loadProxyOptions() {
         const sel = $m('proxy-line-select');
         sel.innerHTML = '<option value="">None (Direct)</option>';
         data.proxy_lines.forEach(p => {
-            if (p.is_active) {
-                sel.innerHTML += `<option value="${p.id}">${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})</option>`;
-            }
+            const disabled = !p.is_active ? ' disabled' : '';
+            sel.innerHTML += `<option value="${p.id}"${disabled}>${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})${!p.is_active ? ' (inactive)' : ''}</option>`;
         });
     } catch(e) {}
 }
