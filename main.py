@@ -1994,7 +1994,6 @@ setLang(lang);
 </body>
 </html>"""
 
-@# ------------------ تابع کمکی اتصال از طریق پروکسی ------------------
 async def create_proxied_connection(address, port, link):
     proxy_line_id = link.get("proxy_line_id")
     if not proxy_line_id:
