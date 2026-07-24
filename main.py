@@ -2124,7 +2124,7 @@ async def perform_proxy_test(proxy_row):
             "UPDATE proxy_lines SET last_test_status = 'error', last_latency_ms = NULL WHERE id = $1",
             (proxy_id,)
         )
-        return {"id": proxy_id, "ok": False, "error": str(e), "latency_ms": None, "status_code": None
+        return {"id": proxy_id, "ok": False, "error": str(e), "latency_ms": None, "status_code": None}
 
 
 @app.post("/api/proxy-lines/{pid}/test")
