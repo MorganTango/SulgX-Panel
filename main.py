@@ -404,6 +404,18 @@ if CONFIG["database_url"] and HAS_POSTGRES:
                 CREATE TABLE IF NOT EXISTS doh_upstreams (
                     id SERIAL PRIMARY KEY, url TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS proxy_lines (
+                    id SERIAL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL DEFAULT 'socks5',
+                    host TEXT NOT NULL,
+                    port INTEGER NOT NULL,
+                    username TEXT DEFAULT '',
+                    password TEXT DEFAULT '',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TEXT DEFAULT (now()::text),
+                    updated_at TEXT DEFAULT (now()::text)
+                );
             """)
             for col, col_type in [
                 ("tfo", "BOOLEAN DEFAULT FALSE"),
@@ -428,17 +440,18 @@ if CONFIG["database_url"] and HAS_POSTGRES:
                 ("port", "INTEGER DEFAULT 443"),
             ]:
                 await ensure_column_pg("links", col, col_type)
-                await ensure_column_pg("daily_traffic", "uid", "TEXT DEFAULT ''")
-                await ensure_column_pg("custom_addresses", "flag", "TEXT DEFAULT ''")
-                await ensure_column_pg("profile_addresses", "flag", "TEXT DEFAULT ''")
-                await ensure_column_pg("login_logs", "browser", "TEXT DEFAULT ''")
-                await ensure_column_pg("login_logs", "os", "TEXT DEFAULT ''")
-                await ensure_column_pg("profile_addresses", "name", "TEXT DEFAULT ''")
-                await ensure_column_pg("profile_addresses", "sort_number", "INTEGER DEFAULT 0")
-                await ensure_column_pg("login_logs", "country", "TEXT DEFAULT ''")
-                await ensure_column_pg("login_logs", "city", "TEXT DEFAULT ''")
-                await ensure_column_pg("login_logs", "isp", "TEXT DEFAULT ''")
-                await ensure_column_pg("login_logs", "org", "TEXT DEFAULT ''")
+            await ensure_column_pg("daily_traffic", "uid", "TEXT DEFAULT ''")
+            await ensure_column_pg("custom_addresses", "flag", "TEXT DEFAULT ''")
+            await ensure_column_pg("profile_addresses", "flag", "TEXT DEFAULT ''")
+            await ensure_column_pg("login_logs", "browser", "TEXT DEFAULT ''")
+            await ensure_column_pg("login_logs", "os", "TEXT DEFAULT ''")
+            await ensure_column_pg("profile_addresses", "name", "TEXT DEFAULT ''")
+            await ensure_column_pg("profile_addresses", "sort_number", "INTEGER DEFAULT 0")
+            await ensure_column_pg("login_logs", "country", "TEXT DEFAULT ''")
+            await ensure_column_pg("login_logs", "city", "TEXT DEFAULT ''")
+            await ensure_column_pg("login_logs", "isp", "TEXT DEFAULT ''")
+            await ensure_column_pg("login_logs", "org", "TEXT DEFAULT ''")
+            await ensure_column_pg("links", "proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL")
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
         async with pg_pool.acquire() as conn:
@@ -484,6 +497,7 @@ else:
         db_conn = await aiosqlite.connect(db_path)
         db_conn.row_factory = aiosqlite.Row
         await db_conn.execute("PRAGMA journal_mode=WAL")
+        await db_conn.execute("PRAGMA foreign_keys = ON")
         await db_conn.executescript("""
             CREATE TABLE IF NOT EXISTS links (
                 uid TEXT PRIMARY KEY, label TEXT NOT NULL,
@@ -546,6 +560,18 @@ else:
             CREATE TABLE IF NOT EXISTS doh_upstreams (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS proxy_lines (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'socks5',
+                host TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                username TEXT DEFAULT '',
+                password TEXT DEFAULT '',
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
         """)
         await db_conn.commit()
 
@@ -590,6 +616,7 @@ else:
         await ensure_column_sqlite("login_logs", "city", "TEXT DEFAULT ''")
         await ensure_column_sqlite("login_logs", "isp", "TEXT DEFAULT ''")
         await ensure_column_sqlite("login_logs", "org", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("links", "proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL")
 
         await db_conn.commit()
 
@@ -1967,6 +1994,34 @@ setLang(lang);
 </body>
 </html>"""
 
+@# ------------------ تابع کمکی اتصال از طریق پروکسی ------------------
+async def create_proxied_connection(address, port, link):
+    proxy_line_id = link.get("proxy_line_id")
+    if not proxy_line_id:
+        return await asyncio.open_connection(address, port)
+
+    proxy_row = await db_fetchone(
+        "SELECT * FROM proxy_lines WHERE id = ?",
+        "SELECT * FROM proxy_lines WHERE id = $1",
+        (proxy_line_id,)
+    )
+    if not proxy_row or not proxy_row["is_active"]:
+        return await asyncio.open_connection(address, port)
+
+    proxy_type = proxy_row["type"]
+    proxy_host = proxy_row["host"]
+    proxy_port = int(proxy_row["port"])
+    username = proxy_row.get("username")
+    password = proxy_row.get("password")
+
+    proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
+    if username:
+        proxy = proxy.with_auth(username, password)
+
+    sock = await proxy.connect(dest_host=address, dest_port=port)
+    reader, writer = await asyncio.open_connection(sock=sock)
+    return reader, writer
+
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root(request: Request):
     if CAMOUFLAGE_URL:
@@ -2633,6 +2688,98 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
                     "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
                 }
     return {"ok": True}
+
+# ------------------ Proxy Lines API ------------------
+@app.get("/api/proxy-lines")
+async def list_proxy_lines(_=Depends(require_auth)):
+    rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
+                             "SELECT * FROM proxy_lines ORDER BY id")
+    return {"proxy_lines": [dict(r) for r in rows]}
+
+@app.post("/api/proxy-lines")
+@limiter.limit("5/minute")
+async def create_proxy_line(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    proxy_type = body.get("type", "socks5")
+    host = (body.get("host") or "").strip()
+    port = int(body.get("port") or 0)
+    if not host or port <= 0:
+        raise HTTPException(status_code=400, detail="Host and valid port are required")
+    username = body.get("username", "")
+    password = body.get("password", "")
+
+    await db_execute(
+        "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES ($1,$2,$3,$4,$5,$6)",
+        (name, proxy_type, host, port, username, password)
+    )
+    return {"ok": True}
+
+@app.patch("/api/proxy-lines/{pid}")
+async def update_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    updates = {}
+    for field in ("name", "type", "host", "port", "username", "password", "is_active"):
+        if field in body:
+            updates[field] = body[field]
+    if not updates:
+        return {"ok": True}
+
+    if DB_BACKEND == "sqlite":
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [pid]
+        await db_execute(f"UPDATE proxy_lines SET {set_clause} WHERE id = ?", "", values)
+    else:
+        set_clause = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(updates.keys()))
+        values = list(updates.values()) + [pid]
+        await db_execute("", f"UPDATE proxy_lines SET {set_clause} WHERE id = ${len(values)}", tuple(values))
+    return {"ok": True}
+
+@app.delete("/api/proxy-lines/{pid}")
+async def delete_proxy_line(pid: int, _=Depends(require_auth)):
+    await db_execute("DELETE FROM proxy_lines WHERE id = ?",
+                     "DELETE FROM proxy_lines WHERE id = $1", (pid,))
+    return {"ok": True}
+
+@app.post("/api/proxy-lines/{pid}/test")
+async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
+    proxy_row = await db_fetchone(
+        "SELECT * FROM proxy_lines WHERE id = ?",
+        "SELECT * FROM proxy_lines WHERE id = $1", (pid,)
+    )
+    if not proxy_row:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+
+    try:
+        proxy_type = proxy_row["type"]
+        proxy_host = proxy_row["host"]
+        proxy_port = int(proxy_row["port"])
+        username = proxy_row.get("username")
+        password = proxy_row.get("password")
+
+        proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
+        if username:
+            proxy = proxy.with_auth(username, password)
+
+        sock = await proxy.connect(dest_host="1.1.1.1", dest_port=80)
+        reader, writer = await asyncio.open_connection(sock=sock)
+        writer.write(b"GET / HTTP/1.0\r\nHost: 1.1.1.1\r\n\r\n")
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(100), timeout=5.0)
+        writer.close()
+        await writer.wait_closed()
+        if response:
+            return {"ok": True, "message": "Proxy is working"}
+        else:
+            raise HTTPException(status_code=502, detail="No response from proxy")
+    except Exception as e:
+        logger.error(f"Proxy test failed for id={pid}: {e}")
+        raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
+
+# ------------------ Inbound Management (modified for proxy) ------------------
 @app.post("/api/links")
 @limiter.limit("10/minute")
 async def create_link(request: Request, _=Depends(require_auth)):
@@ -2654,6 +2801,13 @@ async def create_link(request: Request, _=Depends(require_auth)):
     async with LINKS_LOCK:
         if uid in LINKS:
             raise HTTPException(status_code=400, detail="An inbound with this UUID already exists")
+
+    proxy_line_id = body.get("proxy_line_id")
+    if proxy_line_id is not None:
+        proxy_line_id = int(proxy_line_id)
+    else:
+        proxy_line_id = None
+
     default_limit = 0
     def_limit_row = await db_fetchone("SELECT value FROM settings WHERE key='default_limit_bytes'", "SELECT value FROM settings WHERE key='default_limit_bytes'")
     if def_limit_row and def_limit_row["value"]:
@@ -2731,13 +2885,14 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "allow_insecure": allow_insecure, "random_path": random_path, "enable_ipv6": enable_ipv6,
         "smux_enabled": smux_enabled, "ip_limit": ip_limit,
         "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
+        "proxy_line_id": proxy_line_id,
     }
     async with LINKS_LOCK:
         LINKS[uid] = link_data
     await db_execute(
-        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
-        (uid, label, limit_bytes, 0, max_conn, now, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port),
+        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
+        (uid, label, limit_bytes, 0, max_conn, now, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id),
     )
     extra = {"custom_path": custom_path, "custom_sni": custom_sni, "custom_host": custom_host, "custom_fp": custom_fp, "fragment": fragment,
              "tfo": tfo, "ech_enabled": ech_enabled, "ech_sni": ech_sni, "ech_doh": ech_doh,
@@ -2759,7 +2914,6 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
         "vless_link": generate_vless_link(uid, remark=f"SulgX-{label}", extra=extra, server_domain=domain),
     }
-
 
 @app.get("/api/links")
 async def list_links(request: Request, _=Depends(require_auth)):
@@ -2988,7 +3142,6 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
                 raise HTTPException(status_code=400, detail="Cannot rename the default system inbound.")
 
     updates = {}
-    # --- collect all supported fields ---
     field_map = {
         "active": ("active", int),
         "limit_value": None,
@@ -3021,6 +3174,7 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
         "fingerprint": ("fingerprint", str),
         "alpn": ("alpn", str),
         "port": ("port", int),
+        "proxy_line_id": ("proxy_line_id", lambda x: int(x) if x else None),
     }
 
     for key, mapping in field_map.items():
@@ -3561,7 +3715,6 @@ PROXY_WHITELIST = set(
 ) if os.environ.get("PROXY_WHITELIST") else None
 
 async def _is_safe_target(url: str) -> bool:
-    """Block private / loopback / link‑local IPs and enforce optional whitelist."""
     parsed = urlparse(url)
     hostname = parsed.hostname
     if not hostname:
@@ -3734,7 +3887,7 @@ async def sub_group_subscription(uuid_key: str, request: Request):
     content = base64.b64encode("\n".join(lines).encode()).decode()
     return Response(content=content, media_type="text/plain")
 
-# ------------------ User Dashboard & Subscription ------------------
+# ---------- User Dashboard (before subscription endpoints) ----------
 @app.get("/user/{uid}")
 async def user_dashboard(uid: str, request: Request):
     async with LINKS_LOCK:
@@ -5248,7 +5401,7 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
             await websocket.close(code=1008, reason="blocked domain")
             return
 
-        # ---------- SSRF Protection (added) ----------
+        # ---------- SSRF Protection ----------
         try:
             ip_addr = await resolve_domain_to_ip(address)
             if ip_addr:
@@ -7129,6 +7282,26 @@ textarea.fi { resize: vertical; min-height: 130px; }
         <table class="tbl" id="inbound-table"><thead><tr><th><input type="checkbox" id="select-all" onchange="toggleSelectAll()"></th><th data-sort="label" onclick="sortLinks('label')"><span data-en="Name" data-fa="نام">Name</span> ↕</th><th data-en="Type" data-fa="نوع">Type</th><th data-sort="used_bytes" onclick="sortLinks('used_bytes')"><span data-en="Usage" data-fa="مصرف">Usage</span> ↕</th><th data-en="Conns" data-fa="اتصالات">Conns</th><th data-sort="expires_at" onclick="sortLinks('expires_at')"><span data-en="Expiry" data-fa="انقضا">Expiry</span> ↕</th><th data-en="Status" data-fa="وضعیت">Status</th><th data-en="Actions" data-fa="عملیات">Actions</th></tr></thead><tbody id="ltb"></tbody></table></div>
         <div class="empty" id="lempty" style="display:none;padding:30px;">No inbounds found</div>
       </div>
+      <div class="card" style="margin-top:20px;">
+        <div class="card-hd">
+          <span class="card-title" data-en="Proxy Lines" data-fa="پروکسی لاین">Proxy Lines</span>
+          <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
+        </div>
+        <div class="tbl-wrap">
+          <table class="tbl" id="proxy-lines-table">
+            <thead>
+              <tr>
+                <th data-en="Name" data-fa="نام">Name</th>
+                <th>Type</th>
+                <th>Host:Port</th>
+                <th data-en="Status" data-fa="وضعیت">Status</th>
+                <th data-en="Actions" data-fa="عملیات">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="proxy-lines-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </section>
     <section class="page" id="page-addresses">
       <div class="page-header"><div class="page-title" data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</div></div>
@@ -7522,6 +7695,12 @@ example.com
     <div class="fg"><label class="fl" data-en="Max Connections" data-fa="حداکثر اتصالات">Max Connections</label><input class="fi" type="number" id="nc" min="0" value="0" placeholder="0 = Unlimited"></div>
     <div class="fg"><label class="fl" data-en="Validity (Days)" data-fa="اعتبار (روز)">Validity (Days)</label><input class="fi" type="number" id="nd" min="0" value="0" placeholder="0 = Unlimited"></div>
     <div class="fg"><label class="fl" data-en="Color" data-fa="رنگ">Color</label><input type="color" id="alink-color" value="#39ff14"></div>
+    <div class="fg">
+      <label class="fl" data-en="Outbound Proxy" data-fa="پروکسی خروجی">Outbound Proxy</label>
+      <select class="fs" id="proxy-line-select">
+        <option value="">None (Direct)</option>
+      </select>
+    </div>
     <div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-primary" onclick="createLink()" style="flex:1;" data-en="Create" data-fa="ایجاد">Create</button><button class="btn btn-outline" onclick="document.getElementById('mo-add').classList.remove('show')" data-en="Cancel" data-fa="انصراف">Cancel</button></div>
   </div>
 </div>
@@ -7638,6 +7817,12 @@ example.com
     <div class="fg"><label class="fl" data-en="Max Connections" data-fa="حداکثر اتصالات">Max Connections</label><input class="fi" type="number" id="ec" min="0" placeholder="0 = Unlimited"></div>
     <div class="fg"><label class="fl" data-en="Validity (Days)" data-fa="اعتبار (روز)">Validity (Days)</label><input class="fi" type="number" id="ed" min="0" placeholder="0 = Unlimited"></div>
     <div class="fg"><label class="fl" data-en="Color" data-fa="رنگ">Color</label><input type="color" id="e-color" value="#39ff14"></div>
+    <div class="fg">
+      <label class="fl" data-en="Outbound Proxy" data-fa="پروکسی خروجی">Outbound Proxy</label>
+      <select class="fs" id="proxy-line-select">
+        <option value="">None (Direct)</option>
+      </select>
+    </div>
     <div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-primary" onclick="saveEdit()" style="flex:1;" data-en="Save" data-fa="ذخیره">Save</button><button class="btn btn-danger btn-sm" onclick="resetTraf()" data-en="Reset Traffic" data-fa="بازنشانی ترافیک">Reset Traffic</button><button class="btn btn-outline" onclick="document.getElementById('mo-edit').classList.remove('show')" data-en="Cancel" data-fa="انصراف">Cancel</button></div>
   </div>
 </div>
@@ -7695,6 +7880,22 @@ example.com"></textarea>
     <div class="mo-title" data-en="Save as Profile" data-fa="ذخیره به‌عنوان پروفایل">Save as Profile</div>
     <div class="fg"><label class="fl" data-en="Profile Name" data-fa="نام پروفایل">Profile Name</label><input class="fi" id="scanner-profile-name"></div>
     <button class="btn btn-primary" onclick="saveScannerProfile()" style="width:100%;justify-content:center;margin-top:10px;">Save</button>
+  </div>
+</div>
+<div class="mo" id="mo-proxy">
+  <div class="mo-box">
+    <button class="mo-close" onclick="document.getElementById('mo-proxy').classList.remove('show')">✕</button>
+    <div class="mo-title" data-en="Add/Edit Proxy" data-fa="افزودن/ویرایش پروکسی">Add/Edit Proxy</div>
+    <input type="hidden" id="proxy-id">
+    <div class="fg"><label class="fl" data-en="Name" data-fa="نام">Name</label><input class="fi" id="proxy-name"></div>
+    <div class="fg"><label class="fl">Type</label><select class="fs" id="proxy-type"><option value="socks5">SOCKS5</option><option value="http">HTTP</option></select></div>
+    <div class="fg"><label class="fl">Host</label><input class="fi" id="proxy-host"></div>
+    <div class="fg"><label class="fl">Port</label><input class="fi" type="number" id="proxy-port"></div>
+    <div class="fg"><label class="fl">Username</label><input class="fi" id="proxy-username"></div>
+    <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="proxy-password"></div>
+    <div class="fg"><label class="fl">Active</label><div class="toggle on" id="proxy-active" onclick="this.classList.toggle('on')"></div></div>
+    <button class="btn btn-primary" onclick="saveProxy()" style="width:100%; margin-top:10px;">Save</button>
+    <button class="btn btn-outline btn-sm" onclick="testProxyDirect(document.getElementById('proxy-id').value)" style="width:100%; margin-top:6px;">Test Connection</button>
   </div>
 </div>
 <script>
@@ -8290,6 +8491,7 @@ async function showDashboard(){
   loadIpProfiles();
   buildDohUI();
   loadMultiPanel();
+  loadProxyLines();
   setLang(lang);
   startPanelClock();
   syncGlassThemeButtons();
@@ -8345,7 +8547,15 @@ async function doLogout(){
     window.location.href = prefix + '/login';
 }
 document.querySelectorAll('.nav-link[data-page]').forEach(el=>el.addEventListener('click',()=>{switchPage(el.dataset.page);document.getElementById('mainNav').classList.remove('open');}));
-function switchPage(id){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$m('page-'+id).classList.add('active');document.querySelectorAll('.nav-link').forEach(n=>n.classList.toggle('active',n.dataset.page===id));document.querySelectorAll('.mobile-nav .nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===id));}
+function switchPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  $m('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-link').forEach(n=>n.classList.toggle('active',n.dataset.page===id));
+  document.querySelectorAll('.mobile-nav .nav-item').forEach(n=>n.classList.toggle('active',n.dataset.page===id));
+  if (id === 'inbounds') {
+    loadProxyLines();
+  }
+}
 function toast(msg,err=false){const t=$m('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';clearTimeout(t._hide);t._hide=setTimeout(()=>t.classList.remove('show'),3000);}
 function fmtB(b){if(!b||b===0)return'0 B';return b>=1073741824?(b/1073741824).toFixed(2)+' GB':b>=1048576?(b/1048576).toFixed(2)+' MB':(b/1024).toFixed(1)+' KB';}
 function fmtLim(b){if(!b||b===0)return'∞';const g=b/1073741824;return(g%1===0?g.toFixed(0):g.toFixed(1))+' GB';}
@@ -8419,7 +8629,11 @@ async function togLink(el){const uid=el.dataset.uid,l=allLinks.find(x=>x.uuid===
 function showQuickAdd(){$m('mo-quick-add').classList.add('show');}
 async function quickCreate(){const label=$m('quick-label').value.trim()||'User-'+Math.random().toString(36).slice(2,8);const limit=parseFloat($m('quick-limit').value)||0;const days=parseInt($m('quick-days').value)||0;try{const r=await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label,limit_value:limit,limit_unit:'GB',days_valid:days})});if(!r.ok)throw new Error((await r.json()).detail);const data=await r.json();$m('mo-quick-add').classList.remove('show');const userUrl='https://'+location.host+'/user/'+data.uuid;toast('Created! '+userUrl);loadLinks();loadStats();}catch(e){toast('Error: '+e.message,true);}}
 async function cloneLink(uid){try{const r=await authenticatedFetch('/api/links/'+uid+'/clone',{method:'POST'});if(!r.ok)throw new Error((await r.json()).detail);toast('Cloned successfully');loadLinks();loadStats();}catch(e){toast('Error: '+e.message,true);}}
-function showAddMo(){$m('mo-add').classList.add('show');loadIpProfilesForSelect();}
+function showAddMo(){
+  $m('mo-add').classList.add('show');
+  loadIpProfilesForSelect();
+  loadProxyOptions();
+}
 async function createLink(){
   const label=$m('nl').value.trim()||'User-'+Math.random().toString(36).slice(2,8);
   const uuid=$m('auuid').value.trim();
@@ -8457,7 +8671,8 @@ async function createLink(){
     fragment_interval:$m('afrag-interval').value.trim()||'10-20',
     allow_insecure:allowInsecure,random_path:randomPath,
     smux_enabled:smuxEnabled,ip_limit:ipLimit,
-    protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port
+    protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port,
+    proxy_line_id: parseInt($m('proxy-line-select').value) || null
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
@@ -8496,7 +8711,6 @@ function showEditMo(uid){
   if(l.smux_enabled) $m('smux-edit').classList.add('on'); else $m('smux-edit').classList.remove('on');
   $m('eip-limit').value = l.ip_limit || 0;
   $m('eprotocol').value = l.protocol || 'vless-ws';
-  // fingerprint
   const currentFp = l.fingerprint || 'chrome';
   const fpSel = $m('efingerprint-sel');
   const fpCustom = $m('efingerprint-custom');
@@ -8504,7 +8718,7 @@ function showEditMo(uid){
   if (!currentFp || currentFp.toLowerCase() === 'none') {
       fpSel.value = 'none';
       fpCustom.style.display = 'none';
-      fpHidden.value = '';   // send empty to backend (will become None)
+      fpHidden.value = '';
   } else if (['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'].includes(currentFp)) {
       fpSel.value = currentFp;
       fpCustom.style.display = 'none';
@@ -8516,13 +8730,12 @@ function showEditMo(uid){
       fpHidden.value = currentFp;
   }
 
-  // ALPN
-  const currentAlpn = l.alpn || '';   // empty string means none
+  const currentAlpn = l.alpn || '';
   const alpnSel = $m('ealpn-sel');
   const alpnCustom = $m('ealpn-custom');
   const alpnHidden = $m('ealpn');
   if (!currentAlpn) {
-      alpnSel.value = '';   // select "None (default)"
+      alpnSel.value = '';
       alpnCustom.style.display = 'none';
       alpnHidden.value = '';
   } else if (['http/1.1','h2,http/1.1','h2'].includes(currentAlpn)) {
@@ -8549,7 +8762,14 @@ function showEditMo(uid){
   $m('efrag').value = l.fragment||'';
   loadIpProfilesForSelectEdit(l.ip_profile_id || '');
   $m('enaming-mode').value = l.naming_mode || 'default';
-  $m('et').textContent=(lang==='fa'?'ویرایش: ':'EDIT: ')+l.label; $m('mo-edit').classList.add('show');
+  $m('et').textContent=(lang==='fa'?'ویرایش: ':'EDIT: ')+l.label;
+  loadProxyOptions();
+  setTimeout(() => {
+      if (l.proxy_line_id) {
+          $m('proxy-line-select').value = l.proxy_line_id;
+      }
+  }, 200);
+  $m('mo-edit').classList.add('show');
 }
 async function saveEdit(){
   const uid=$m('eu').value,v=parseFloat($m('el').value)||0,mc=parseInt($m('ec').value)||0,days=parseInt($m('ed').value)||0;
@@ -8586,7 +8806,8 @@ async function saveEdit(){
     fragment_interval:$m('efrag-interval').value.trim()||'10-20',
     allow_insecure:allowInsecure,random_path:randomPath,
     smux_enabled:smuxEnabled,ip_limit:ipLimit,
-    protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port
+    protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port,
+    proxy_line_id: parseInt($m('proxy-line-select').value) || null
   };
   if(days)body.days_valid=days;
 
@@ -9887,11 +10108,226 @@ async function saveBlockedDomains() {
         toast('Saved');
     } catch { toast('Error', true); }
 }
+
+async function loadProxyLines() {
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines');
+        const data = await r.json();
+        renderProxyLines(data.proxy_lines);
+    } catch(e) {}
+}
+
+function renderProxyLines(lines) {
+    const tbody = $m('proxy-lines-tbody');
+    if (!lines.length) {
+        tbody.innerHTML = '<tr><td colspan="5">No proxy lines defined</td></tr>';
+        return;
+    }
+    tbody.innerHTML = lines.map(p => `
+        <tr>
+            <td>${esc(p.name)}</td>
+            <td>${p.type.toUpperCase()}</td>
+            <td>${esc(p.host)}:${p.port}</td>
+            <td><span class="tag ${p.is_active ? 'tag-on' : 'tag-off'}">${p.is_active ? 'On' : 'Off'}</span></td>
+            <td>
+                <button class="act-btn act-edit" onclick="editProxy(${p.id})">✏️</button>
+                <button class="act-btn act-del" onclick="deleteProxy(${p.id})">🗑️</button>
+                <button class="act-btn act-sub" onclick="testProxyDirect(${p.id})">🔍</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function testProxyDirect(pid) {
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines/' + pid + '/test', {method:'POST'});
+        const d = await r.json();
+        toast(d.message || 'OK');
+    } catch(e) {
+        toast('Test failed', true);
+    }
+}
+
+function showAddProxyMo() {
+    $m('proxy-id').value = '';
+    $m('proxy-name').value = '';
+    $m('proxy-type').value = 'socks5';
+    $m('proxy-host').value = '';
+    $m('proxy-port').value = '';
+    $m('proxy-username').value = '';
+    $m('proxy-password').value = '';
+    $m('proxy-active').classList.add('on');
+    $m('mo-proxy').classList.add('show');
+}
+
+async function editProxy(pid) {
+    const r = await authenticatedFetch('/api/proxy-lines');
+    const data = await r.json();
+    const proxy = data.proxy_lines.find(p => p.id === pid);
+    if (!proxy) return;
+    $m('proxy-id').value = proxy.id;
+    $m('proxy-name').value = proxy.name;
+    $m('proxy-type').value = proxy.type;
+    $m('proxy-host').value = proxy.host;
+    $m('proxy-port').value = proxy.port;
+    $m('proxy-username').value = proxy.username || '';
+    $m('proxy-password').value = proxy.password || '';
+    if (proxy.is_active) $m('proxy-active').classList.add('on');
+    else $m('proxy-active').classList.remove('on');
+    $m('mo-proxy').classList.add('show');
+}
+
+async function saveProxy() {
+    const pid = $m('proxy-id').value;
+    const body = {
+        name: $m('proxy-name').value.trim(),
+        type: $m('proxy-type').value,
+        host: $m('proxy-host').value.trim(),
+        port: parseInt($m('proxy-port').value),
+        username: $m('proxy-username').value.trim(),
+        password: $m('proxy-password').value.trim(),
+        is_active: $m('proxy-active').classList.contains('on') ? 1 : 0
+    };
+    if (!body.name || !body.host || !body.port) {
+        toast('Fill required fields', true);
+        return;
+    }
+    try {
+        if (pid) {
+            await authenticatedFetch('/api/proxy-lines/' + pid, {
+                method:'PATCH',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(body)
+            });
+        } else {
+            await authenticatedFetch('/api/proxy-lines', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(body)
+            });
+        }
+        $m('mo-proxy').classList.remove('show');
+        loadProxyLines();
+    } catch(e) {
+        toast('Error', true);
+    }
+}
+
+async function deleteProxy(pid) {
+    if (!confirm('Delete this proxy?')) return;
+    try {
+        await authenticatedFetch('/api/proxy-lines/' + pid, {method:'DELETE'});
+        loadProxyLines();
+    } catch(e) {
+        toast('Error', true);
+    }
+}
+
+async function loadProxyOptions() {
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines');
+        const data = await r.json();
+        const sel = $m('proxy-line-select');
+        sel.innerHTML = '<option value="">None (Direct)</option>';
+        data.proxy_lines.forEach(p => {
+            if (p.is_active) {
+                sel.innerHTML += `<option value="${p.id}">${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})</option>`;
+            }
+        });
+    } catch(e) {}
+}
 </script>
 </body>
 </html>"""
 
-# ... (PANEL_HTML variable remains unchanged, containing all HTML/JS/CSS) ...
+@app.get("/api/proxy-lines")
+async def list_proxy_lines(_=Depends(require_auth)):
+    rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
+                             "SELECT * FROM proxy_lines ORDER BY id")
+    return {"proxy_lines": [dict(r) for r in rows]}
+
+@app.post("/api/proxy-lines")
+@limiter.limit("5/minute")
+async def create_proxy_line(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    proxy_type = body.get("type", "socks5")
+    host = (body.get("host") or "").strip()
+    port = int(body.get("port") or 0)
+    if not host or port <= 0:
+        raise HTTPException(status_code=400, detail="Host and valid port are required")
+    username = body.get("username", "")
+    password = body.get("password", "")
+    await db_execute(
+        "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES (?,?,?,?,?,?)",
+        "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES ($1,$2,$3,$4,$5,$6)",
+        (name, proxy_type, host, port, username, password)
+    )
+    return {"ok": True}
+
+@app.patch("/api/proxy-lines/{pid}")
+async def update_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    updates = {}
+    for field in ("name", "type", "host", "port", "username", "password", "is_active"):
+        if field in body:
+            updates[field] = body[field]
+    if not updates:
+        return {"ok": True}
+
+    if DB_BACKEND == "sqlite":
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [pid]
+        await db_execute(f"UPDATE proxy_lines SET {set_clause} WHERE id = ?", "", values)
+    else:
+        set_clause = ", ".join(f"{k} = ${i+1}" for i, k in enumerate(updates.keys()))
+        values = list(updates.values()) + [pid]
+        await db_execute("", f"UPDATE proxy_lines SET {set_clause} WHERE id = ${len(values)}", tuple(values))
+    return {"ok": True}
+
+@app.delete("/api/proxy-lines/{pid}")
+async def delete_proxy_line(pid: int, _=Depends(require_auth)):
+    await db_execute("DELETE FROM proxy_lines WHERE id = ?",
+                     "DELETE FROM proxy_lines WHERE id = $1", (pid,))
+    return {"ok": True}
+
+@app.post("/api/proxy-lines/{pid}/test")
+async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
+    proxy_row = await db_fetchone(
+        "SELECT * FROM proxy_lines WHERE id = ?",
+        "SELECT * FROM proxy_lines WHERE id = $1", (pid,)
+    )
+    if not proxy_row:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+
+    try:
+        from python_socks.async_.asyncio import Proxy
+        proxy_type = proxy_row["type"]
+        proxy_host = proxy_row["host"]
+        proxy_port = int(proxy_row["port"])
+        username = proxy_row.get("username")
+        password = proxy_row.get("password")
+
+        proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
+        if username:
+            proxy = proxy.with_auth(username, password)
+
+        sock = await proxy.connect(dest_host="1.1.1.1", dest_port=80)
+        reader, writer = await asyncio.open_connection(sock=sock)
+        writer.write(b"GET / HTTP/1.0\r\nHost: 1.1.1.1\r\n\r\n")
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(100), timeout=5.0)
+        writer.close()
+        await writer.wait_closed()
+        if response:
+            return {"ok": True, "message": "Proxy is working"}
+        else:
+            raise HTTPException(status_code=502, detail="No response from proxy")
+    except Exception as e:
+        logger.error(f"Proxy test failed for id={pid}: {e}")
+        raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
