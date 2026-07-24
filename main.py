@@ -2020,11 +2020,15 @@ async def create_proxied_connection(address, port, link):
         logger.warning(f"Proxy {proxy_line_id} not found or inactive, falling back to direct")
         return await asyncio.open_connection(address, port)
 
-    proxy_type = proxy_row["type"]
+    proxy_type = proxy_row["type"].lower()
     proxy_host = proxy_row["host"]
     proxy_port = int(proxy_row["port"])
     username = proxy_row.get("username")
     password = proxy_row.get("password")
+
+    if proxy_type not in ("socks4", "socks5", "http"):
+        logger.error(f"Unsupported proxy type '{proxy_type}'. Supported: socks4, socks5, http. Falling back to direct.")
+        return await asyncio.open_connection(address, port)
 
     try:
         auth_str = ""
@@ -2034,14 +2038,88 @@ async def create_proxied_connection(address, port, link):
             auth_str = f"{safe_user}:{safe_pass}@"
         proxy_url = f"{proxy_type}://{auth_str}{proxy_host}:{proxy_port}"
         proxy = Proxy.from_url(proxy_url)
-        logger.info(f"Attempting proxied connection to {address}:{port} via {proxy_type}://{proxy_host}:{proxy_port}")
-        sock = await proxy.connect(dest_host=address, dest_port=port)
+        logger.info(f"Attempting proxied connection to {address}:{port} via {proxy_url}")
+        sock = await asyncio.wait_for(
+            proxy.connect(dest_host=address, dest_port=port),
+            timeout=10.0
+        )
         reader, writer = await asyncio.open_connection(sock=sock)
         tune_socket(writer)
         return reader, writer
+    except asyncio.TimeoutError:
+        logger.error(f"Proxy connection timed out for {proxy_host}:{proxy_port}, falling back to direct.")
+        return await asyncio.open_connection(address, port)
     except Exception as e:
         logger.error(f"Proxy connection failed for {proxy_type}://{proxy_host}:{proxy_port} -> {address}:{port} : {e}")
-        raise
+        return await asyncio.open_connection(address, port)
+
+
+async def perform_proxy_test(proxy_row):
+    proxy_id = proxy_row["id"]
+    proxy_type = proxy_row["type"].lower()
+    proxy_host = proxy_row["host"]
+    proxy_port = int(proxy_row["port"])
+    username = proxy_row.get("username")
+    password = proxy_row.get("password")
+
+    if proxy_type not in ("socks4", "socks5", "http"):
+        return {"id": proxy_id, "ok": False, "error": "Unsupported proxy type", "latency_ms": None, "status_code": None}
+
+    try:
+        start = time.time()
+        auth_str = ""
+        if username and password:
+            safe_user = quote(username)
+            safe_pass = quote(password)
+            auth_str = f"{safe_user}:{safe_pass}@"
+        proxy_url = f"{proxy_type}://{auth_str}{proxy_host}:{proxy_port}"
+        proxy = Proxy.from_url(proxy_url)
+        sock = await asyncio.wait_for(
+            proxy.connect(dest_host="httpbin.org", dest_port=80),
+            timeout=8.0
+        )
+        reader, writer = await asyncio.open_connection(sock=sock)
+        writer.write(b"GET /ip HTTP/1.0\r\nHost: httpbin.org\r\n\r\n")
+        await writer.drain()
+        response = await asyncio.wait_for(reader.read(500), timeout=5.0)
+        writer.close()
+        await writer.wait_closed()
+        latency = round((time.time() - start) * 1000)
+        if b'"origin"' in response:
+            return {"id": proxy_id, "ok": True, "latency_ms": latency, "status_code": 200}
+        else:
+            return {"id": proxy_id, "ok": False, "error": "Invalid response", "latency_ms": latency, "status_code": 502}
+    except asyncio.TimeoutError:
+        return {"id": proxy_id, "ok": False, "error": "Connection timed out", "latency_ms": None, "status_code": None}
+    except Exception as e:
+        return {"id": proxy_id, "ok": False, "error": str(e), "latency_ms": None, "status_code": None}
+
+
+@app.post("/api/proxy-lines/{pid}/test")
+async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
+    proxy_row = await db_fetchone(
+        "SELECT * FROM proxy_lines WHERE id = ?",
+        "SELECT * FROM proxy_lines WHERE id = $1",
+        (pid,)
+    )
+    if not proxy_row:
+        raise HTTPException(status_code=404, detail="Proxy not found")
+    result = await perform_proxy_test(proxy_row)
+    return result
+
+
+@app.post("/api/proxy-lines/test-all")
+async def test_all_proxy_lines(_=Depends(require_auth)):
+    rows = await db_fetchall("SELECT * FROM proxy_lines", "SELECT * FROM proxy_lines")
+    tasks = [perform_proxy_test(row) for row in rows]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    clean_results = []
+    for res in results:
+        if isinstance(res, dict):
+            clean_results.append(res)
+        else:
+            clean_results.append({"error": "Task failed"})
+    return {"results": clean_results}
 
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root(request: Request):
@@ -7299,7 +7377,10 @@ textarea.fi { resize: vertical; min-height: 130px; }
       <div class="card" style="margin-top:20px;">
         <div class="card-hd">
           <span class="card-title" data-en="Proxy Lines" data-fa="پروکسی لاین">Proxy Lines</span>
-          <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
+            <button class="btn btn-outline btn-sm" onclick="testAllProxies()" data-en="Test All" data-fa="تست همه">Test All</button>
+          </div>
         </div>
         <div class="tbl-wrap">
           <table class="tbl" id="proxy-lines-table">
@@ -7309,6 +7390,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
                 <th>Type</th>
                 <th>Host:Port</th>
                 <th data-en="Status" data-fa="وضعیت">Status</th>
+                <th data-en="Health" data-fa="سلامت">Health</th>
                 <th data-en="Actions" data-fa="عملیات">Actions</th>
               </tr>
             </thead>
@@ -7908,6 +7990,14 @@ example.com"></textarea>
     <div class="fg"><label class="fl">Username</label><input class="fi" id="proxy-username"></div>
     <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="proxy-password"></div>
     <div class="fg"><label class="fl">Active</label><div class="toggle on" id="proxy-active" onclick="this.classList.toggle('on')"></div></div>
+    <div class="fg">
+      <label class="fl" data-en="Bulk Import (one per line)" data-fa="افزودن گروهی (هر خط یک)">Bulk Import</label>
+      <textarea class="fi" id="proxy-bulk" rows="4" placeholder="ip:port:user:pass
+ip:port:user
+ip:port
+host:port@user:pass"></textarea>
+      <button class="btn btn-outline btn-sm" onclick="importProxiesBulk()">Add All</button>
+    </div>
     <button class="btn btn-primary" onclick="saveProxy()" style="width:100%; margin-top:10px;">Save</button>
     <button class="btn btn-outline btn-sm" onclick="testProxyDirect(document.getElementById('proxy-id').value)" style="width:100%; margin-top:6px;">Test Connection</button>
   </div>
@@ -10235,7 +10325,7 @@ async function loadProxyLines() {
 function renderProxyLines(lines) {
     const tbody = $m('proxy-lines-tbody');
     if (!lines.length) {
-        tbody.innerHTML = '<tr><td colspan="5">No proxy lines defined</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">No proxy lines defined</td></tr>';
         return;
     }
     tbody.innerHTML = lines.map(p => `
@@ -10244,6 +10334,7 @@ function renderProxyLines(lines) {
             <td>${p.type.toUpperCase()}</td>
             <td>${esc(p.host)}:${p.port}</td>
             <td><span class="tag ${p.is_active ? 'tag-on' : 'tag-off'}">${p.is_active ? 'On' : 'Off'}</span></td>
+            <td id="proxy-status-${p.id}">–</td>
             <td>
                 <button class="act-btn act-edit" onclick="editProxy(${p.id})">✏️</button>
                 <button class="act-btn act-del" onclick="deleteProxy(${p.id})">🗑️</button>
@@ -10257,7 +10348,15 @@ async function testProxyDirect(pid) {
     try {
         const r = await authenticatedFetch('/api/proxy-lines/' + pid + '/test', {method:'POST'});
         const d = await r.json();
-        toast(d.message || 'OK');
+        const statusEl = $m('proxy-status-' + pid);
+        if (statusEl) {
+            if (d.ok) {
+                statusEl.innerHTML = `<span style="color:var(--green)">✅ ${d.latency_ms}ms</span>`;
+            } else {
+                statusEl.innerHTML = `<span style="color:var(--red)">❌ ${d.error || 'Failed'}</span>`;
+            }
+        }
+        toast(d.ok ? `OK (${d.latency_ms}ms)` : (d.error || 'Failed'));
     } catch(e) {
         toast('Test failed', true);
     }
@@ -10363,6 +10462,82 @@ async function loadProxyOptionsEdit() {
         });
     } catch(e) {}
 }
+
+async function importProxiesBulk() {
+    const raw = $m('proxy-bulk').value.trim();
+    if (!raw) return toast('No data', true);
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
+    let added = 0;
+    for (const line of lines) {
+        let host = '', port = 1080, user = '', pass = '', type = 'socks5';
+        let cleanLine = line;
+        if (cleanLine.includes('://')) {
+            const urlPart = cleanLine.split('://')[1];
+            const protoPart = cleanLine.split('://')[0].toLowerCase();
+            if (['socks5','socks4','http'].includes(protoPart)) type = protoPart;
+            cleanLine = urlPart;
+        }
+        if (cleanLine.includes('@')) {
+            const atIdx = cleanLine.lastIndexOf('@');
+            const hostPart = cleanLine.substring(atIdx + 1);
+            const authPart = cleanLine.substring(0, atIdx);
+            const authParts = authPart.split(':');
+            user = authParts[0] || '';
+            pass = authParts.slice(1).join(':') || '';
+            cleanLine = hostPart;
+        }
+        const hostParts = cleanLine.split(':');
+        host = hostParts[0].trim();
+        if (hostParts.length >= 2) port = parseInt(hostParts[1]) || 1080;
+        if (!host) continue;
+        const name = user ? `${host}:${port} (${user})` : `${host}:${port}`;
+        try {
+            const r = await authenticatedFetch('/api/proxy-lines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: name,
+                    type: type,
+                    host: host,
+                    port: port,
+                    username: user,
+                    password: pass,
+                    is_active: 1
+                })
+            });
+            if (r.ok) added++;
+        } catch(e) {}
+    }
+    toast(`Added ${added} proxies`);
+    $m('proxy-bulk').value = '';
+    loadProxyLines();
+}
+
+async function testAllProxies() {
+    const btn = document.querySelector('[onclick="testAllProxies()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Testing all...'; }
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines/test-all', {method:'POST'});
+        const d = await r.json();
+        if (d.results) {
+            d.results.forEach(res => {
+                const id = res.id;
+                const statusEl = $m('proxy-status-' + id);
+                if (statusEl) {
+                    if (res.ok) {
+                        statusEl.innerHTML = `<span style="color:var(--green)">✅ ${res.latency_ms}ms</span>`;
+                    } else {
+                        statusEl.innerHTML = `<span style="color:var(--red)">❌ ${res.error || 'Failed'}</span>`;
+                    }
+                }
+            });
+        }
+        toast('All proxies tested');
+    } catch(e) {
+        toast('Test all failed', true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Test All'; }
+}
 </script>
 </body>
 </html>"""
@@ -10425,36 +10600,26 @@ async def delete_proxy_line(pid: int, _=Depends(require_auth)):
 async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
     proxy_row = await db_fetchone(
         "SELECT * FROM proxy_lines WHERE id = ?",
-        "SELECT * FROM proxy_lines WHERE id = $1", (pid,)
+        "SELECT * FROM proxy_lines WHERE id = $1",
+        (pid,)
     )
     if not proxy_row:
         raise HTTPException(status_code=404, detail="Proxy not found")
+    result = await perform_proxy_test(proxy_row)
+    return result
 
-    try:
-        proxy_type = proxy_row["type"]
-        proxy_host = proxy_row["host"]
-        proxy_port = int(proxy_row["port"])
-        username = proxy_row.get("username")
-        password = proxy_row.get("password")
-
-        proxy = Proxy.from_url(f"{proxy_type}://{proxy_host}:{proxy_port}")
-        if username:
-            proxy = proxy.with_auth(username, password)
-
-        sock = await proxy.connect(dest_host="httpbin.org", dest_port=80)
-        reader, writer = await asyncio.open_connection(sock=sock)
-        writer.write(b"GET /ip HTTP/1.0\r\nHost: httpbin.org\r\n\r\n")
-        await writer.drain()
-        response = await asyncio.wait_for(reader.read(500), timeout=5.0)
-        writer.close()
-        await writer.wait_closed()
-        if b'"origin"' in response:
-            return {"ok": True, "message": "Proxy is working (verified via httpbin.org/ip)"}
+@app.post("/api/proxy-lines/test-all")
+async def test_all_proxy_lines(_=Depends(require_auth)):
+    rows = await db_fetchall("SELECT * FROM proxy_lines", "SELECT * FROM proxy_lines")
+    tasks = [perform_proxy_test(row) for row in rows]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    clean_results = []
+    for res in results:
+        if isinstance(res, dict):
+            clean_results.append(res)
         else:
-            raise HTTPException(status_code=502, detail="No valid response from proxy")
-    except Exception as e:
-        logger.error(f"Proxy test failed for id={pid}: {e}")
-        raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
+            clean_results.append({"error": "Task failed"})
+    return {"results": clean_results}
 
 # -------------------- Panel HTML endpoints --------------------
 @app.get("/login", response_class=HTMLResponse)
