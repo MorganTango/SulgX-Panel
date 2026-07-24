@@ -4070,10 +4070,29 @@ async def user_dashboard(uid: str, request: Request):
   --transition:0.3s cubic-bezier(0.20,0.80,0.40,1);
   --halo-color-1:rgba(57,255,20,0.22); --halo-color-2:rgba(57,255,20,0.10); --halo-color-3:rgba(57,255,20,0.05);
 }}
+body.light-mode {{
+  --primary:#2e7d32; --primary-dim:rgba(46,125,50,0.20); --primary-glass:rgba(46,125,50,0.10);
+  --bg:#f5f9f5; --bg2:#ffffff; --bg3:#eaf1ea;
+  --surface:rgba(255,255,255,0.8); --surface2:rgba(255,255,255,0.94); --surface3:rgba(245,250,245,0.90);
+  --border:rgba(0,0,0,0.12); --border2:rgba(0,0,0,0.22);
+  --text:#1a1a1a; --text2:#4a4a4a; --text3:#888;
+  --shadow:0 12px 36px rgba(0,0,0,0.10); --shadow-soft:0 6px 20px rgba(0,0,0,0.06); --shadow-glow:0 0 30px rgba(46,125,50,0.25);
+  --halo-color-1:rgba(46,125,50,0.20); --halo-color-2:rgba(46,125,50,0.10); --halo-color-3:rgba(46,125,50,0.05);
+}}
+body.blue-mode {{
+  --primary:#3b82f6; --primary-dim:rgba(59,130,246,0.20); --primary-glass:rgba(59,130,246,0.10);
+  --bg:#0f172a; --bg2:#1e293b; --bg3:#1e293b;
+  --surface:rgba(30,41,59,0.82); --surface2:rgba(30,41,59,0.94); --surface3:rgba(51,65,85,0.90);
+  --border:rgba(59,130,246,0.14); --border2:rgba(59,130,246,0.34);
+  --text:#e2e8f0; --text2:#94a3b8; --text3:#64748b;
+  --shadow:0 12px 40px rgba(0,0,0,0.5); --shadow-soft:0 6px 24px rgba(0,0,0,0.3); --shadow-glow:0 0 35px rgba(59,130,246,0.35);
+  --halo-color-1:rgba(59,130,246,0.22); --halo-color-2:rgba(59,130,246,0.10); --halo-color-3:rgba(59,130,246,0.05);
+}}
 body{{
   font-family:'Inter','Vazirmatn',sans-serif; background:var(--bg); color:var(--text);
   display:flex; align-items:center; justify-content:center; min-height:100vh; padding:20px;
   position:relative; overflow-x:hidden;
+  transition:background 0.5s,color 0.5s;
 }}
 body[dir="rtl"]{{direction:rtl;text-align:right}}
 body::before{{
@@ -6108,41 +6127,55 @@ PANEL_HTML = r"""<!DOCTYPE html>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
 :root {
-  --primary: #39ff14;
-  --primary-dim: rgba(57, 255, 20, 0.18);
-  --primary-glass: rgba(57, 255, 20, 0.08);
-  --bg: #09090b;
-  --bg2: #111113;
-  --bg3: #18181b;
-  --surface: rgba(18, 18, 20, 0.75);
-  --surface2: rgba(24, 24, 27, 0.9);
-  --surface3: rgba(30, 30, 35, 0.85);
-  --border: rgba(57, 255, 20, 0.1);
-  --border2: rgba(57, 255, 20, 0.25);
-  --text: #f0f0f4;
-  --text2: #a1a1aa;
-  --text3: #71717a;
-  --green: #4ade80;
-  --red: #f87171;
-  --yellow: #fbbf24;
-  --header-h: 68px;
-  --footer-h: 52px;
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 26px;
-  --shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-  --shadow-soft: 0 6px 24px rgba(0, 0, 0, 0.35);
-  --shadow-glow: 0 0 35px var(--primary-dim);
-  --transition: 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
-  --halo-color-1: rgba(57, 255, 20, 0.2);
-  --halo-color-2: rgba(57, 255, 20, 0.1);
-  --halo-color-3: rgba(57, 255, 20, 0.05);
+    --primary: #39ff14;
+    --primary-dim: rgba(57, 255, 20, .18);
+    --primary-glass: rgba(57, 255, 20, .08);
+    --bg: #09090b;
+    --bg2: #111113;
+    --bg3: #18181b;
+    --surface: rgba(18, 18, 20, .75);
+    --surface2: rgba(24, 24, 27, .9);
+    --surface3: rgba(30, 30, 35, .85);
+    --border: rgba(57, 255, 20, .1);
+    --border2: rgba(57, 255, 20, .25);
+    --text: #f0f0f4;
+    --text2: #a1a1aa;
+    --text3: #71717a;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --header-h: 68px;
+    --footer-h: 52px;
+    --radius-sm: 12px;
+    --radius-md: 18px;
+    --radius-lg: 26px;
+    --shadow: 0 12px 40px rgba(0, 0, 0, .6);
+    --shadow-soft: 0 6px 24px rgba(0, 0, 0, .35);
+    --shadow-glow: 0 0 35px var(--primary-dim);
+    --transition: .3s cubic-bezier(.2, .9, .4, 1);
+    --halo-color-1: rgba(57, 255, 20, .2);
+    --halo-color-2: rgba(57, 255, 20, .1);
+    --halo-color-3: rgba(57, 255, 20, .05);
+    --icon-dashboard: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'/%3E%3C/svg%3E");
+    --icon-inbounds: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 18h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'/%3E%3C/svg%3E");
+    --icon-cleanip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'/%3E%3C/svg%3E");
+    --icon-scanner: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z'/%3E%3C/svg%3E");
+    --icon-logs: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E");
+    --icon-telegram: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='currentColor' viewBox='0 0 24 24'%3E%3Cpath d='M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z'/%3E%3C/svg%3E");
+    --icon-settings: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'/%3E%3C/svg%3E");
+    --icon-traffic: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.971M15 13l-3 3m0 0l-3-3m3 3V8'/%3E%3C/svg%3E");
+    --icon-requests: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M13 10V3L4 14h7v7l9-11h-7z'/%3E%3C/svg%3E");
+    --icon-uptime: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%234ade80' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'/%3E%3C/svg%3E");
+    --icon-disk: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23fbbf24' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'/%3E%3C/svg%3E");
+    --icon-download: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4'/%3E%3C/svg%3E");
+    --icon-upload: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l4 4m0 0l-4 4m4-4H4'/%3E%3C/svg%3E");
+    --icon-monthly: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%2339ff14' viewBox='0 0 24 24'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'/%3E%3C/svg%3E");
 }
 
 body.light-mode {
@@ -7305,8 +7338,12 @@ textarea.fi { resize: vertical; min-height: 130px; }
       <button class="btn btn-primary" onclick="doLogin()" style="width:100%;justify-content:center;padding:14px;margin-top:16px;">LOGIN</button>
       <div id="login-err" style="color:var(--red);font-size:0.9rem;margin-top:10px;text-align:center;display:none">Invalid password</div>
       <div style="margin-top:20px; text-align:center; display:flex; justify-content:center; gap:20px;">
-        <a href="https://github.com/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">🐙 GitHub</a>
-        <a href="https://t.me/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">📨 Telegram</a>
+        <a href="https://github.com/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">
+          <span class="icon-github"></span> GitHub
+        </a>
+        <a href="https://t.me/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">
+          <span class="icon-telegram-link"></span> Telegram
+        </a>
       </div>
     </div>
   </div>
@@ -7318,50 +7355,91 @@ textarea.fi { resize: vertical; min-height: 130px; }
         <span class="logo">SulgX</span><span class="version-tag">v1.5.4</span>
         <span id="panel-clock" style="font-weight:600;color:var(--primary);margin-left:8px;font-size:0.9rem;"></span>
         <nav class="header-nav" id="mainNav">
-          <button class="nav-link active" data-page="dashboard">📊 <span data-en="Dashboard" data-fa="داشبورد">Dashboard</span></button>
-          <button class="nav-link" data-page="inbounds">📡 <span data-en="Inbounds" data-fa="اینباندها">Inbounds</span></button>
-          <button class="nav-link" data-page="addresses">🔗 <span data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</span></button>
-          <button class="nav-link" data-page="ipscanner">🔍 <span data-en="IP Scanner" data-fa="اسکنر آی‌پی">IP Scanner</span></button>
-          <button class="nav-link" data-page="logs">📋 <span data-en="Logs" data-fa="لاگ‌ها">Logs</span></button>
-          <button class="nav-link" data-page="telegram">🤖 <span data-en="Telegram" data-fa="تلگرام">Telegram</span></button>
-          <button class="nav-link" data-page="settings">⚙️ <span data-en="Settings" data-fa="تنظیمات">Settings</span></button>
+          <button class="nav-link active" data-page="dashboard">
+            <span class="nav-icon icon-dashboard"></span>
+            <span data-en="Dashboard" data-fa="داشبورد">Dashboard</span>
+          </button>
+          <button class="nav-link" data-page="inbounds">
+            <span class="nav-icon icon-inbounds"></span>
+            <span data-en="Inbounds" data-fa="اینباندها">Inbounds</span>
+          </button>
+          <button class="nav-link" data-page="addresses">
+            <span class="nav-icon icon-cleanip"></span>
+            <span data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</span>
+          </button>
+          <button class="nav-link" data-page="ipscanner">
+            <span class="nav-icon icon-scanner"></span>
+            <span data-en="IP Scanner" data-fa="اسکنر آی‌پی">IP Scanner</span>
+          </button>
+          <button class="nav-link" data-page="logs">
+            <span class="nav-icon icon-logs"></span>
+            <span data-en="Logs" data-fa="لاگ‌ها">Logs</span>
+          </button>
+          <button class="nav-link" data-page="telegram">
+            <span class="nav-icon icon-telegram"></span>
+            <span data-en="Telegram" data-fa="تلگرام">Telegram</span>
+          </button>
+          <button class="nav-link" data-page="settings">
+            <span class="nav-icon icon-settings"></span>
+            <span data-en="Settings" data-fa="تنظیمات">Settings</span>
+          </button>
         </nav>
       </div>
       <div class="header-right">
-  <button class="btn-icon" onclick="showQuickAdd()" title="Quick Add" data-en-title="Quick Add" data-fa-title="ساخت سریع">➕</button>
+  <button class="btn-icon" onclick="showQuickAdd()" title="Quick Add" data-en-title="Quick Add" data-fa-title="ساخت سریع">
+    <span class="icon-quick-add"></span>
+  </button>
   <div class="lang-switch">
     <button class="lang-btn lang-en active" onclick="setLang('en')">EN</button>
     <button class="lang-btn lang-fa" onclick="setLang('fa')">FA</button>
   </div>
-  <button class="btn-icon" id="theme-toggle-btn" onclick="toggleTheme()">🌙</button>
-  <button class="btn-icon btn-danger-icon" onclick="doLogout()" title="Logout" data-en-title="Logout" data-fa-title="خروج">🚪</button>
+  <button class="btn-icon" id="theme-toggle-btn" onclick="toggleTheme()">
+    <span class="icon-theme-dark"></span>
+    <span class="icon-theme-light"></span>
+  </button>
+  <button class="btn-icon btn-danger-icon" onclick="doLogout()" title="Logout" data-en-title="Logout" data-fa-title="خروج">
+    <span class="icon-logout"></span>
+  </button>
 </div>
   </header>
   <main class="main">
     <section class="page active" id="page-dashboard">
       <div class="page-header"><div><div class="page-title" data-en="Dashboard" data-fa="داشبورد">Dashboard</div><div class="page-sub" id="last-up">–</div></div></div>
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-label" data-en="Traffic" data-fa="ترافیک">Traffic</div><div class="stat-val" id="sv-traffic">–<span class="stat-unit"> MB</span></div></div>
-        <div class="stat-card"><div class="stat-label" data-en="Requests" data-fa="درخواست‌ها">Requests</div><div class="stat-val" id="sv-requests">–</div></div>
-        <div class="stat-card"><div class="stat-label" data-en="Uptime" data-fa="آپتایم">Uptime</div><div class="stat-val" id="sv-uptime" style="font-size:1.2rem;">–</div></div>
-        <div class="stat-card"><div class="stat-label" data-en="Disk Free" data-fa="فضای دیسک">Disk Free</div><div class="stat-val" id="sv-disk">–<span class="stat-unit"> GB</span></div></div>
+        <div class="stat-card stat-traffic"><div class="stat-label" data-en="Traffic" data-fa="ترافیک">Traffic</div><div class="stat-val" id="sv-traffic">–<span class="stat-unit"> MB</span></div></div>
+        <div class="stat-card stat-requests"><div class="stat-label" data-en="Requests" data-fa="درخواست‌ها">Requests</div><div class="stat-val" id="sv-requests">–</div></div>
+        <div class="stat-card stat-uptime"><div class="stat-label" data-en="Uptime" data-fa="آپتایم">Uptime</div><div class="stat-val" id="sv-uptime" style="font-size:1.2rem;">–</div></div>
+        <div class="stat-card stat-disk"><div class="stat-label" data-en="Disk Free" data-fa="فضای دیسک">Disk Free</div><div class="stat-val" id="sv-disk">–<span class="stat-unit"> GB</span></div></div>
       </div>
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-label" data-en="Download Speed" data-fa="سرعت دانلود">Download Speed</div><div class="stat-val" id="sv-down-speed">–<span class="stat-unit"> KB/s</span></div></div>
-        <div class="stat-card"><div class="stat-label" data-en="Upload Speed" data-fa="سرعت آپلود">Upload Speed</div><div class="stat-val" id="sv-up-speed">–<span class="stat-unit"> KB/s</span></div></div>
-        <div class="stat-card"><div class="stat-label" data-en="Monthly Usage" data-fa="مصرف ماهانه">Monthly Usage</div><div class="stat-val" id="sv-monthly">–<span class="stat-unit"> GB</span></div></div>
+        <div class="stat-card stat-download"><div class="stat-label" data-en="Download Speed" data-fa="سرعت دانلود">Download Speed</div><div class="stat-val" id="sv-down-speed">–<span class="stat-unit"> KB/s</span></div></div>
+        <div class="stat-card stat-upload"><div class="stat-label" data-en="Upload Speed" data-fa="سرعت آپلود">Upload Speed</div><div class="stat-val" id="sv-up-speed">–<span class="stat-unit"> KB/s</span></div></div>
+        <div class="stat-card stat-monthly"><div class="stat-label" data-en="Monthly Usage" data-fa="مصرف ماهانه">Monthly Usage</div><div class="stat-val" id="sv-monthly">–<span class="stat-unit"> GB</span></div></div>
         <div class="stat-card" style="font-size:0.8rem;">
           <div class="stat-label" data-en="Settings Status" data-fa="وضعیت تنظیمات">Settings Status</div>
           <div class="status-cards-grid" id="settings-status">
-            <div class="status-glass-card inactive" id="st-log" data-en="Logging" data-fa="لاگ">📝 Logging</div>
-            <div class="status-glass-card inactive" id="st-auto" data-en="Auto Disable" data-fa="غیرفعال‌سازی">🚫 Auto Disable</div>
-            <div class="status-glass-card inactive" id="st-tgrep" data-en="TG Reports" data-fa="گزارش تلگرام">📊 TG Reports</div>
-            <div class="status-glass-card inactive" id="st-tgnot" data-en="TG Notify" data-fa="اعلان تلگرام">🔔 TG Notify</div>
-            <div class="status-glass-card inactive" id="st-bot" data-en="Bot" data-fa="ربات">🤖 Bot</div>
-            <div class="status-glass-card inactive" id="st-stealth" data-en="Stealth" data-fa="استتار">🥷 Stealth</div>
+            <div class="status-glass-card inactive" id="st-log" data-en="Logging" data-fa="لاگ">
+              <span class="status-icon icon-logging"></span> Logging
+            </div>
+            <div class="status-glass-card inactive" id="st-auto" data-en="Auto Disable" data-fa="غیرفعال‌سازی">
+              <span class="status-icon icon-auto-disable"></span> Auto Disable
+            </div>
+            <div class="status-glass-card inactive" id="st-tgrep" data-en="TG Reports" data-fa="گزارش تلگرام">
+              <span class="status-icon icon-tg-reports"></span> TG Reports
+            </div>
+            <div class="status-glass-card inactive" id="st-tgnot" data-en="TG Notify" data-fa="اعلان تلگرام">
+              <span class="status-icon icon-tg-notify"></span> TG Notify
+            </div>
+            <div class="status-glass-card inactive" id="st-bot" data-en="Bot" data-fa="ربات">
+              <span class="status-icon icon-bot"></span> Bot
+            </div>
+            <div class="status-glass-card inactive" id="st-stealth" data-en="Stealth" data-fa="استتار">
+              <span class="status-icon icon-stealth"></span> Stealth
+            </div>
           </div>
         </div>
       </div>
+      <!-- Rest of dashboard unchanged (CPU, Memory, Charts, Recent Activity) – no emoji to replace -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="card"><div class="card-hd"><span class="card-title" data-en="CPU" data-fa="پردازنده">CPU</span><span id="cpu-v" style="font-weight:700;color:var(--primary);">–%</span></div><div class="sys-bar"><div class="sys-fill" id="cpu-b" style="background:var(--primary);width:0%"></div></div></div>
         <div class="card"><div class="card-hd"><span class="card-title" data-en="Memory" data-fa="حافظه">Memory</span><span id="mem-v" style="font-weight:700;color:var(--green);">–%</span></div><div class="sys-bar"><div class="sys-fill" id="mem-b" style="background:var(--green);width:0%"></div></div></div>
