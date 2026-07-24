@@ -146,7 +146,7 @@ _scan_lock = asyncio.Lock()
 
 IP_PROFILES: dict = {}
 IP_PROFILES_LOCK = asyncio.Lock()
-DOH_UPSTREAMS: list = [
+DOH_UPSTREAMS = [
     "https://dns.cloudflare.com/dns-query",
     "https://dns.google/dns-query",
     "https://dns.quad9.net/dns-query",
@@ -718,51 +718,52 @@ async def save_subs():
 async def load_initial_data():
     global DEFAULT_PATH, DOH_ENABLED, DEFAULT_XHTTP_PATH
     rows = await db_fetchall("SELECT * FROM links", "SELECT * FROM links")
-async with LINKS_LOCK:
-    for r in rows:
-        link_dict = dict(r)
-        if "proxy_line_id" not in link_dict:
-            link_dict["proxy_line_id"] = None
-        LINKS[r["uid"]] = link_dict
-    addr_rows = await db_fetchall("SELECT address, flag FROM custom_addresses", "SELECT address, flag FROM custom_addresses")
-    async with CUSTOM_ADDRESSES_LOCK:
-        CUSTOM_ADDRESSES[:] = [r["address"] for r in addr_rows]
-        async with IP_FLAG_CACHE_LOCK:
-            for r in addr_rows:
-                if r["flag"]:
-                    IP_FLAG_CACHE[r["address"]] = r["flag"]
-    if not CUSTOM_ADDRESSES:
-        CUSTOM_ADDRESSES.append("www.speedtest.net")
-    if not LINKS:
-        default_uuid = str(uuid_lib.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
-        default_link = {
-            "uid": default_uuid, "label": "This Server is Free", "limit_bytes": 0, "used_bytes": 0,
-            "max_connections": 0, "created_at": now, "active": 1, "expires_at": None,
-            "custom_path": "", "custom_sni": "", "custom_host": "", "custom_fp": "chrome",
-            "color": "#39ff14", "flag": "", "fragment": "", "ip_profile_id": "", "naming_mode": "default",
-            "tfo": 0, "ech_enabled": 0, "ech_sni": "", "ech_doh": "",
-            "fragment_mode": "off", "fragment_length": "100-200", "fragment_interval": "10-20",
-            "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
-            "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
-            "fingerprint": "chrome", "alpn": "", "port": 443
-        }
-        async with LINKS_LOCK:
-            LINKS[default_uuid] = default_link
-        await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
-            (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
-             "", "", "", "chrome",
-             "#39ff14", "", "", "", "default",
-             0, 0, "", "",
-             "off", "100-200", "10-20",
-             0, 0, 1,
-             0, 0, "vless-ws",
-             "chrome", "", 443),
-        )
-    total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
-    stats["total_bytes"] = total_usage
+    async with LINKS_LOCK:
+        for r in rows:
+            link_dict = dict(r)
+            if "proxy_line_id" not in link_dict:
+                link_dict["proxy_line_id"] = None
+            LINKS[r["uid"]] = link_dict
+        addr_rows = await db_fetchall("SELECT address, flag FROM custom_addresses", "SELECT address, flag FROM custom_addresses")
+        async with CUSTOM_ADDRESSES_LOCK:
+            CUSTOM_ADDRESSES[:] = [r["address"] for r in addr_rows]
+            async with IP_FLAG_CACHE_LOCK:
+                for r in addr_rows:
+                    if r["flag"]:
+                        IP_FLAG_CACHE[r["address"]] = r["flag"]
+        if not CUSTOM_ADDRESSES:
+            CUSTOM_ADDRESSES.append("www.speedtest.net")
+        if not LINKS:
+            default_uuid = str(uuid_lib.uuid4())
+            now = datetime.now(timezone.utc).isoformat()
+            default_link = {
+                "uid": default_uuid, "label": "This Server is Free", "limit_bytes": 0, "used_bytes": 0,
+                "max_connections": 0, "created_at": now, "active": 1, "expires_at": None,
+                "custom_path": "", "custom_sni": "", "custom_host": "", "custom_fp": "chrome",
+                "color": "#39ff14", "flag": "", "fragment": "", "ip_profile_id": "", "naming_mode": "default",
+                "tfo": 0, "ech_enabled": 0, "ech_sni": "", "ech_doh": "",
+                "fragment_mode": "off", "fragment_length": "100-200", "fragment_interval": "10-20",
+                "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
+                "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
+                "fingerprint": "chrome", "alpn": "", "port": 443,
+                "proxy_line_id": None
+            }
+            async with LINKS_LOCK:
+                LINKS[default_uuid] = default_link
+            await db_execute(
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
+                (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
+                 "", "", "", "chrome",
+                 "#39ff14", "", "", "", "default",
+                 0, 0, "", "",
+                 "off", "100-200", "10-20",
+                 0, 0, 1,
+                 0, 0, "vless-ws",
+                 "chrome", "", 443, None),
+            )
+        total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
+        stats["total_bytes"] = total_usage
     profiles = await db_fetchall("SELECT * FROM ip_profiles", "SELECT * FROM ip_profiles")
     async with IP_PROFILES_LOCK:
         IP_PROFILES.clear()
@@ -774,17 +775,18 @@ async with LINKS_LOCK:
                 for a in addrs:
                     if a["flag"]:
                         IP_FLAG_CACHE[a["address"]] = a["flag"]
-    global DOH_UPSTREAMS
     rows = await db_fetchall("SELECT url FROM doh_upstreams", "SELECT url FROM doh_upstreams")
     if rows:
-        DOH_UPSTREAMS = [r["url"] for r in rows]
+        DOH_UPSTREAMS.clear()
+        DOH_UPSTREAMS.extend([r["url"] for r in rows])
     else:
-        DOH_UPSTREAMS = [
+        DOH_UPSTREAMS.clear()
+        DOH_UPSTREAMS.extend([
             "https://dns.cloudflare.com/dns-query",
             "https://dns.google/dns-query",
             "https://dns.quad9.net/dns-query",
             "https://doh.opendns.com/dns-query"
-        ]
+        ])
     def_path_row = await db_fetchone("SELECT value FROM settings WHERE key='default_path'", "SELECT value FROM settings WHERE key='default_path'")
     if def_path_row and def_path_row["value"]:
         DEFAULT_PATH = def_path_row["value"]
@@ -1084,7 +1086,7 @@ async def send_main_menu(chat_id: int, lang: str):
 # -------------------- Lifespan --------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global TIMEZONE_OFFSET, KEEP_ALIVE_ENABLED, KEEP_ALIVE_INTERVAL, KEEP_ALIVE_MODE, DOH_UPSTREAMS, DEFAULT_PATH, DOH_ENABLED
+    global TIMEZONE_OFFSET, KEEP_ALIVE_ENABLED, KEEP_ALIVE_INTERVAL, KEEP_ALIVE_MODE, DEFAULT_PATH, DOH_ENABLED
     global STEALTH_MODE, LANDING_REDIRECT, CAMOUFLAGE_URL, SUB_FILENAME, default_tg_lang
     if DB_BACKEND == "postgresql":
         await init_pg()
