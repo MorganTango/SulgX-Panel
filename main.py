@@ -2139,20 +2139,6 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
     result = await perform_proxy_test(proxy_row)
     return result
 
-
-@app.post("/api/proxy-lines/test-all")
-async def test_all_proxy_lines(_=Depends(require_auth)):
-    rows = await db_fetchall("SELECT * FROM proxy_lines", "SELECT * FROM proxy_lines")
-    tasks = [perform_proxy_test(row) for row in rows]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    clean_results = []
-    for res in results:
-        if isinstance(res, dict):
-            clean_results.append(res)
-        else:
-            clean_results.append({"error": "Task failed"})
-    return {"results": clean_results}
-
 @app.api_route("/", methods=["GET", "HEAD"])
 async def root(request: Request):
     if CAMOUFLAGE_URL:
