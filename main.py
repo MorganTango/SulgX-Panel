@@ -7273,7 +7273,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
           <text x="90" y="58" font-family="'Orbitron',sans-serif" font-size="40" font-weight="900" fill="var(--primary)" text-anchor="middle">SulgX</text>
         </svg>
         <div style="font-family:'Orbitron',sans-serif;font-size:1.5rem;font-weight:900;color:var(--primary);margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;">
-          SulgX Panel <span style="font-size:0.8rem; font-family:'Inter'; color:var(--bg); background:var(--primary); padding:2px 6px; border-radius:4px;">V 1.5.3</span>
+          SulgX Panel <span style="font-size:0.8rem; font-family:'Inter'; color:var(--bg); background:var(--primary); padding:2px 6px; border-radius:4px;">V 1.5.4</span>
         </div>
         <div style="font-size:1rem;color:var(--text3);margin-top:8px;" data-en="Enter your password" data-fa="رمز عبور را وارد کنید">Enter your password</div>
         <div id="login-custom-message" style="margin-top:20px; text-align:center; color:var(--text3); font-size:0.9rem;"></div>
@@ -7292,7 +7292,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
   <header class="header">
     <div class="header-inner">
       <div style="display:flex;align-items:center;gap:16px;">
-        <span class="logo">SulgX</span><span class="version-tag">v1.5.3</span>
+        <span class="logo">SulgX</span><span class="version-tag">v1.5.4</span>
         <span id="panel-clock" style="font-weight:600;color:var(--primary);margin-left:8px;font-size:0.9rem;"></span>
         <nav class="header-nav" id="mainNav">
           <button class="nav-link active" data-page="dashboard">📊 <span data-en="Dashboard" data-fa="داشبورد">Dashboard</span></button>
@@ -7705,7 +7705,7 @@ example.com
   </footer>
 </div>
 <!-- modals -->
-<div class="mo" id="mo-add">
+<div class="mo" id="mo-add" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-add').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Create Inbound" data-fa="ایجاد اینباند">Create Inbound</div>
@@ -7821,12 +7821,11 @@ example.com
       <select class="fs" id="proxy-line-select-create">
         <option value="">None (Direct)</option>
       </select>
+      <button class="btn btn-outline btn-sm" onclick="refreshProxyFlagsAndOptions('create')" style="margin-top:6px;" data-en="🌍 Refresh Flags" data-fa="🌍 بروزرسانی پرچم‌ها">🌍 Refresh Flags</button>
     </div>
-    <div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-primary" onclick="createLink()" style="flex:1;" data-en="Create" data-fa="ایجاد">Create</button><button class="btn btn-outline" onclick="document.getElementById('mo-add').classList.remove('show')" data-en="Cancel" data-fa="انصراف">Cancel</button></div>
-  </div>
 </div>
 
-<div class="mo" id="mo-edit">
+<div class="mo" id="mo-edit" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-edit').classList.remove('show')">✕</button>
     <div class="mo-title" id="et" data-en="Edit Inbound" data-fa="ویرایش اینباند">Edit Inbound</div>
@@ -7943,12 +7942,11 @@ example.com
       <select class="fs" id="proxy-line-select-edit">
         <option value="">None (Direct)</option>
       </select>
+      <button class="btn btn-outline btn-sm" onclick="refreshProxyFlagsAndOptions('edit')" style="margin-top:6px;" data-en="🌍 Refresh Flags" data-fa="🌍 بروزرسانی پرچم‌ها">🌍 Refresh Flags</button>
     </div>
-    <div style="display:flex;gap:6px;margin-top:10px;"><button class="btn btn-primary" onclick="saveEdit()" style="flex:1;" data-en="Save" data-fa="ذخیره">Save</button><button class="btn btn-danger btn-sm" onclick="resetTraf()" data-en="Reset Traffic" data-fa="بازنشانی ترافیک">Reset Traffic</button><button class="btn btn-outline" onclick="document.getElementById('mo-edit').classList.remove('show')" data-en="Cancel" data-fa="انصراف">Cancel</button></div>
-  </div>
 </div>
 
-<div class="mo" id="mo-qr">
+<div class="mo" id="mo-qr" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box" style="max-width:360px;">
     <button class="mo-close" onclick="document.getElementById('mo-qr').classList.remove('show')">✕</button>
     <div class="mo-title">QR Code</div>
@@ -7957,7 +7955,7 @@ example.com
   </div>
 </div>
 
-<div class="mo" id="mo-addr-edit">
+<div class="mo" id="mo-addr-edit" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-addr-edit').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Edit Address" data-fa="ویرایش آدرس">Edit Address</div>
@@ -7966,7 +7964,7 @@ example.com
   </div>
 </div>
 
-<div class="mo" id="mo-quick-add">
+<div class="mo" id="mo-quick-add" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-quick-add').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Quick Add Inbound" data-fa="ساخت سریع اینباند">Quick Add Inbound</div>
@@ -7977,7 +7975,7 @@ example.com
   </div>
 </div>
 
-<div class="mo" id="mo-ip-profile">
+<div class="mo" id="mo-ip-profile" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-ip-profile').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Manage IP Profile" data-fa="مدیریت پروفایل آی‌پی">Manage IP Profile</div>
@@ -7995,7 +7993,7 @@ example.com"></textarea>
   </div>
 </div>
 
-<div class="mo" id="mo-scanner-profile">
+<div class="mo" id="mo-scanner-profile" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-scanner-profile').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Save as Profile" data-fa="ذخیره به‌عنوان پروفایل">Save as Profile</div>
@@ -8003,7 +8001,7 @@ example.com"></textarea>
     <button class="btn btn-primary" onclick="saveScannerProfile()" style="width:100%;justify-content:center;margin-top:10px;">Save</button>
   </div>
 </div>
-<div class="mo" id="mo-proxy">
+<div class="mo" id="mo-proxy" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-proxy').classList.remove('show')">✕</button>
     <div class="mo-title" data-en="Add/Edit Proxy" data-fa="افزودن/ویرایش پروکسی">Add/Edit Proxy</div>
@@ -10657,6 +10655,28 @@ async function testAllProxies() {
     }
     if (btn) { btn.disabled = false; btn.textContent = 'Test All'; }
 }
+async function refreshProxyFlagsAndOptions(context) {
+    const btn = document.querySelector(`#mo-${context === 'create' ? 'add' : 'edit'} button[onclick*="refreshProxyFlagsAndOptions"]`);
+    if (btn) btn.disabled = true;
+    try {
+        await authenticatedFetch('/api/proxy-lines/resolve-flags', {method:'POST'});
+        if (context === 'create') {
+            await loadProxyOptionsCreate();
+        } else {
+            await loadProxyOptionsEdit();
+        }
+        toast(t('Proxy flags refreshed'));
+    } catch(e) {
+        toast(t('Error'), true);
+    }
+    if (btn) btn.disabled = false;
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.mo.show').forEach(m => m.classList.remove('show'));
+    }
+});
 </script>
 </body>
 </html>"""
