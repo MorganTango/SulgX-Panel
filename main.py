@@ -455,6 +455,9 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("login_logs", "isp", "TEXT DEFAULT ''")
             await ensure_column_pg("login_logs", "org", "TEXT DEFAULT ''")
             await ensure_column_pg("proxy_lines", "flag", "TEXT DEFAULT ''")
+            await ensure_column_pg("proxy_lines", "last_test_status", "TEXT DEFAULT ''")
+            await ensure_column_pg("proxy_lines", "last_latency_ms", "INTEGER DEFAULT 0")
+            
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
         async with pg_pool.acquire() as conn:
@@ -622,6 +625,8 @@ else:
         await ensure_column_sqlite("login_logs", "org", "TEXT DEFAULT ''")
         await ensure_column_sqlite("links", "proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL")
         await ensure_column_sqlite("proxy_lines", "flag", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("proxy_lines", "last_test_status", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("proxy_lines", "last_latency_ms", "INTEGER DEFAULT 0")
 
         await db_conn.commit()
 
@@ -2065,6 +2070,11 @@ async def perform_proxy_test(proxy_row):
     password = proxy_row.get("password")
 
     if proxy_type not in ("socks4", "socks5", "http"):
+        await db_execute(
+            "UPDATE proxy_lines SET last_test_status = 'unsupported', last_latency_ms = NULL WHERE id = ?",
+            "UPDATE proxy_lines SET last_test_status = 'unsupported', last_latency_ms = NULL WHERE id = $1",
+            (proxy_id,)
+        )
         return {"id": proxy_id, "ok": False, "error": "Unsupported proxy type", "latency_ms": None, "status_code": None}
 
     try:
@@ -2088,13 +2098,33 @@ async def perform_proxy_test(proxy_row):
         await writer.wait_closed()
         latency = round((time.time() - start) * 1000)
         if b'"origin"' in response:
+            await db_execute(
+                "UPDATE proxy_lines SET last_test_status = 'ok', last_latency_ms = ? WHERE id = ?",
+                "UPDATE proxy_lines SET last_test_status = 'ok', last_latency_ms = $1 WHERE id = $2",
+                (latency, proxy_id)
+            )
             return {"id": proxy_id, "ok": True, "latency_ms": latency, "status_code": 200}
         else:
+            await db_execute(
+                "UPDATE proxy_lines SET last_test_status = 'invalid_response', last_latency_ms = ? WHERE id = ?",
+                "UPDATE proxy_lines SET last_test_status = 'invalid_response', last_latency_ms = $1 WHERE id = $2",
+                (latency, proxy_id)
+            )
             return {"id": proxy_id, "ok": False, "error": "Invalid response", "latency_ms": latency, "status_code": 502}
     except asyncio.TimeoutError:
+        await db_execute(
+            "UPDATE proxy_lines SET last_test_status = 'timeout', last_latency_ms = NULL WHERE id = ?",
+            "UPDATE proxy_lines SET last_test_status = 'timeout', last_latency_ms = NULL WHERE id = $1",
+            (proxy_id,)
+        )
         return {"id": proxy_id, "ok": False, "error": "Connection timed out", "latency_ms": None, "status_code": None}
     except Exception as e:
-        return {"id": proxy_id, "ok": False, "error": str(e), "latency_ms": None, "status_code": None}
+        await db_execute(
+            "UPDATE proxy_lines SET last_test_status = 'error', last_latency_ms = NULL WHERE id = ?",
+            "UPDATE proxy_lines SET last_test_status = 'error', last_latency_ms = NULL WHERE id = $1",
+            (proxy_id,)
+        )
+        return {"id": proxy_id, "ok": False, "error": str(e), "latency_ms": None, "status_code": None
 
 
 @app.post("/api/proxy-lines/{pid}/test")
@@ -2794,8 +2824,10 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
 
 @app.get("/api/proxy-lines")
 async def list_proxy_lines(_=Depends(require_auth)):
-    rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
-                             "SELECT * FROM proxy_lines ORDER BY id")
+    rows = await db_fetchall(
+        "SELECT * FROM proxy_lines ORDER BY CASE WHEN last_test_status = 'ok' THEN 0 ELSE 1 END, last_latency_ms ASC",
+        "SELECT * FROM proxy_lines ORDER BY CASE WHEN last_test_status = 'ok' THEN 0 ELSE 1 END, last_latency_ms ASC"
+    )
     return {"proxy_lines": [dict(r) for r in rows]}
 
 @app.post("/api/proxy-lines")
@@ -10340,6 +10372,12 @@ function renderProxyLines(lines) {
     tbody.innerHTML = lines.map(p => {
         const checked = selectedProxyIds.has(p.id) ? 'checked' : '';
         const flagEmoji = p.flag ? codeToFlag(p.flag) : '';
+        let healthHtml = '–';
+        if (p.last_test_status === 'ok') {
+            healthHtml = `<span style="color:var(--green)">✅ ${p.last_latency_ms}ms</span>`;
+        } else if (p.last_test_status) {
+            healthHtml = `<span style="color:var(--red)">❌ ${p.last_test_status}</span>`;
+        }
         return `
         <tr id="proxy-row-${p.id}">
             <td><input type="checkbox" ${checked} onchange="toggleSelectProxy(${p.id})"></td>
@@ -10347,7 +10385,7 @@ function renderProxyLines(lines) {
             <td>${p.type.toUpperCase()}</td>
             <td>${esc(p.host)}:${p.port}</td>
             <td><span class="tag ${p.is_active ? 'tag-on' : 'tag-off'}">${p.is_active ? 'On' : 'Off'}</span></td>
-            <td id="proxy-status-${p.id}">–</td>
+            <td id="proxy-status-${p.id}">${healthHtml}</td>
             <td>
                 <button class="act-btn act-edit" onclick="editProxy(${p.id})">✏️</button>
                 <button class="act-btn act-del" onclick="deleteProxy(${p.id})">🗑️</button>
@@ -10391,13 +10429,18 @@ async function deleteSelectedProxies() {
 }
 
 async function deleteFailedProxies() {
-    const failedIds = [];
-    document.querySelectorAll('#proxy-lines-tbody tr').forEach(row => {
-        const statusEl = row.querySelector('[id^="proxy-status-"]');
-        if (statusEl && statusEl.textContent.includes('❌')) {
-            const id = parseInt(row.id.replace('proxy-row-', ''));
-            failedIds.push(id);
+    if (!confirm('Delete all failed proxies (based on last test)?')) return;
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines/delete-failed', { method: 'POST' });
+        const d = await r.json();
+        if (d.ok) {
+            toast('Failed proxies deleted');
+            loadProxyLines();
+        } else {
+            toast('Error', true);
         }
+    } catch(e) { toast('Error', true); }
+}
     });
     if (failedIds.length === 0) return toast('No failed proxies', true);
     if (!confirm(`Delete ${failedIds.length} failed proxies?`)) return;
@@ -10648,8 +10691,10 @@ async function testAllProxies() {
 # ------------------ Proxy Lines API ------------------
 @app.get("/api/proxy-lines")
 async def list_proxy_lines(_=Depends(require_auth)):
-    rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
-                             "SELECT * FROM proxy_lines ORDER BY id")
+    rows = await db_fetchall(
+        "SELECT * FROM proxy_lines ORDER BY CASE WHEN last_test_status = 'ok' THEN 0 ELSE 1 END, last_latency_ms ASC",
+        "SELECT * FROM proxy_lines ORDER BY CASE WHEN last_test_status = 'ok' THEN 0 ELSE 1 END, last_latency_ms ASC"
+    )
     return {"proxy_lines": [dict(r) for r in rows]}
 
 @app.post("/api/proxy-lines")
@@ -10790,6 +10835,14 @@ async def resolve_proxy_flags(request: Request, _=Depends(require_auth)):
     results = await asyncio.gather(*tasks)
     resolved = sum(1 for r in results if r)
     return {"resolved": resolved}
+
+@app.post("/api/proxy-lines/delete-failed")
+async def delete_failed_proxy_lines(_=Depends(require_auth)):
+    await db_execute(
+        "DELETE FROM proxy_lines WHERE last_test_status IS NOT NULL AND last_test_status != '' AND last_test_status != 'ok'",
+        "DELETE FROM proxy_lines WHERE last_test_status IS NOT NULL AND last_test_status != '' AND last_test_status != 'ok'"
+    )
+    return {"ok": True}
 
 @app.post("/api/proxy-lines/test-all")
 async def test_all_proxy_lines(_=Depends(require_auth)):
