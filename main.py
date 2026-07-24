@@ -152,7 +152,7 @@ DOH_UPSTREAMS = [
     "https://dns.quad9.net/dns-query",
     "https://doh.opendns.com/dns-query"
 ]
-DOH_ENABLED: bool = True
+DOH_ENABLED = True
 
 IP_FLAG_CACHE: Dict[str, str] = {}
 IP_FLAG_CACHE_LOCK = asyncio.Lock()
@@ -371,7 +371,8 @@ if CONFIG["database_url"] and HAS_POSTGRES:
                     protocol TEXT DEFAULT 'vless-ws',
                     fingerprint TEXT DEFAULT 'chrome',
                     alpn TEXT DEFAULT '',
-                    port INTEGER DEFAULT 443
+                    port INTEGER DEFAULT 443,
+                    proxy_line_id INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL
                 );
                 CREATE TABLE IF NOT EXISTS hourly_traffic (hour TEXT PRIMARY KEY, bytes BIGINT DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS daily_traffic (day TEXT PRIMARY KEY, bytes BIGINT DEFAULT 0, uid TEXT DEFAULT '');
@@ -439,6 +440,7 @@ if CONFIG["database_url"] and HAS_POSTGRES:
                 ("fingerprint", "TEXT DEFAULT 'chrome'"),
                 ("alpn", "TEXT DEFAULT ''"),
                 ("port", "INTEGER DEFAULT 443"),
+                ("proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL"),
             ]:
                 await ensure_column_pg("links", col, col_type)
             await ensure_column_pg("daily_traffic", "uid", "TEXT DEFAULT ''")
@@ -452,7 +454,6 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("login_logs", "city", "TEXT DEFAULT ''")
             await ensure_column_pg("login_logs", "isp", "TEXT DEFAULT ''")
             await ensure_column_pg("login_logs", "org", "TEXT DEFAULT ''")
-            await ensure_column_pg("links", "proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL")
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
         async with pg_pool.acquire() as conn:
@@ -527,7 +528,8 @@ else:
                 protocol TEXT DEFAULT 'vless-ws',
                 fingerprint TEXT DEFAULT 'chrome',
                 alpn TEXT DEFAULT '',
-                port INTEGER DEFAULT 443
+                port INTEGER DEFAULT 443,
+                proxy_line_id INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL
             );
             CREATE TABLE IF NOT EXISTS hourly_traffic (hour TEXT PRIMARY KEY, bytes INTEGER DEFAULT 0);
             CREATE TABLE IF NOT EXISTS daily_traffic (day TEXT PRIMARY KEY, bytes INTEGER DEFAULT 0, uid TEXT DEFAULT '');
@@ -724,46 +726,46 @@ async def load_initial_data():
             if "proxy_line_id" not in link_dict:
                 link_dict["proxy_line_id"] = None
             LINKS[r["uid"]] = link_dict
-        addr_rows = await db_fetchall("SELECT address, flag FROM custom_addresses", "SELECT address, flag FROM custom_addresses")
-        async with CUSTOM_ADDRESSES_LOCK:
-            CUSTOM_ADDRESSES[:] = [r["address"] for r in addr_rows]
-            async with IP_FLAG_CACHE_LOCK:
-                for r in addr_rows:
-                    if r["flag"]:
-                        IP_FLAG_CACHE[r["address"]] = r["flag"]
-        if not CUSTOM_ADDRESSES:
-            CUSTOM_ADDRESSES.append("www.speedtest.net")
-        if not LINKS:
-            default_uuid = str(uuid_lib.uuid4())
-            now = datetime.now(timezone.utc).isoformat()
-            default_link = {
-                "uid": default_uuid, "label": "This Server is Free", "limit_bytes": 0, "used_bytes": 0,
-                "max_connections": 0, "created_at": now, "active": 1, "expires_at": None,
-                "custom_path": "", "custom_sni": "", "custom_host": "", "custom_fp": "chrome",
-                "color": "#39ff14", "flag": "", "fragment": "", "ip_profile_id": "", "naming_mode": "default",
-                "tfo": 0, "ech_enabled": 0, "ech_sni": "", "ech_doh": "",
-                "fragment_mode": "off", "fragment_length": "100-200", "fragment_interval": "10-20",
-                "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
-                "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
-                "fingerprint": "chrome", "alpn": "", "port": 443,
-                "proxy_line_id": None
-            }
-            async with LINKS_LOCK:
-                LINKS[default_uuid] = default_link
-            await db_execute(
-                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
-                (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
-                 "", "", "", "chrome",
-                 "#39ff14", "", "", "", "default",
-                 0, 0, "", "",
-                 "off", "100-200", "10-20",
-                 0, 0, 1,
-                 0, 0, "vless-ws",
-                 "chrome", "", 443, None),
-            )
-        total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
-        stats["total_bytes"] = total_usage
+    addr_rows = await db_fetchall("SELECT address, flag FROM custom_addresses", "SELECT address, flag FROM custom_addresses")
+    async with CUSTOM_ADDRESSES_LOCK:
+        CUSTOM_ADDRESSES[:] = [r["address"] for r in addr_rows]
+        async with IP_FLAG_CACHE_LOCK:
+            for r in addr_rows:
+                if r["flag"]:
+                    IP_FLAG_CACHE[r["address"]] = r["flag"]
+    if not CUSTOM_ADDRESSES:
+        CUSTOM_ADDRESSES.append("www.speedtest.net")
+    if not LINKS:
+        default_uuid = str(uuid_lib.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        default_link = {
+            "uid": default_uuid, "label": "This Server is Free", "limit_bytes": 0, "used_bytes": 0,
+            "max_connections": 0, "created_at": now, "active": 1, "expires_at": None,
+            "custom_path": "", "custom_sni": "", "custom_host": "", "custom_fp": "chrome",
+            "color": "#39ff14", "flag": "", "fragment": "", "ip_profile_id": "", "naming_mode": "default",
+            "tfo": 0, "ech_enabled": 0, "ech_sni": "", "ech_doh": "",
+            "fragment_mode": "off", "fragment_length": "100-200", "fragment_interval": "10-20",
+            "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
+            "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
+            "fingerprint": "chrome", "alpn": "", "port": 443,
+            "proxy_line_id": None
+        }
+        async with LINKS_LOCK:
+            LINKS[default_uuid] = default_link
+        await db_execute(
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
+            (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
+             "", "", "", "chrome",
+             "#39ff14", "", "", "", "default",
+             0, 0, "", "",
+             "off", "100-200", "10-20",
+             0, 0, 1,
+             0, 0, "vless-ws",
+             "chrome", "", 443, None),
+        )
+    total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
+    stats["total_bytes"] = total_usage
     profiles = await db_fetchall("SELECT * FROM ip_profiles", "SELECT * FROM ip_profiles")
     async with IP_PROFILES_LOCK:
         IP_PROFILES.clear()
@@ -1339,8 +1341,8 @@ async def telegram_webhook(request: Request):
                         LINKS[uid] = link_data
                     
                     await db_execute(
-                        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
+                        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
                         (uid, label, link_data["limit_bytes"], link_data["used_bytes"], link_data["max_connections"], now, link_data["active"], expires,
                          link_data["custom_path"], link_data["custom_sni"], link_data["custom_host"], link_data["custom_fp"],
                          link_data["color"], link_data["flag"], link_data["fragment"], link_data["ip_profile_id"], link_data["naming_mode"],
@@ -1348,7 +1350,7 @@ async def telegram_webhook(request: Request):
                          link_data["fragment_mode"], link_data["fragment_length"], link_data["fragment_interval"],
                          link_data["allow_insecure"], link_data["random_path"], link_data["enable_ipv6"],
                          link_data["smux_enabled"], link_data["ip_limit"], link_data["protocol"],
-                         link_data["fingerprint"], link_data["alpn"], link_data["port"])
+                         link_data["fingerprint"], link_data["alpn"], link_data["port"], link_data["proxy_line_id"])
                     )
                     
                     del TELEGRAM_USER_CREATE_STEPS[chat_id]
@@ -1455,7 +1457,7 @@ ENABLE_LOGGING: bool = True
 KEEP_ALIVE_ENABLED: bool = True
 KEEP_ALIVE_MODE: str = "simple"
 DEFAULT_PATH = "/ws/{uid}"
-DOH_ENABLED: bool = True
+DOH_ENABLED = True
 
 # -------------------- Utility functions --------------------
 def verify_password(plain: str, hashed: str) -> bool:
