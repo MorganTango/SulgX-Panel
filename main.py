@@ -10427,19 +10427,6 @@ async function deleteFailedProxies() {
         }
     } catch(e) { toast('Error', true); }
 }
-    });
-    if (failedIds.length === 0) return toast('No failed proxies', true);
-    if (!confirm(`Delete ${failedIds.length} failed proxies?`)) return;
-    try {
-        await authenticatedFetch('/api/proxy-lines/bulk-delete', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ ids: failedIds })
-        });
-        loadProxyLines();
-        toast(`Deleted ${failedIds.length} proxies`);
-    } catch(e) { toast('Error', true); }
-}
 
 function copySelectedProxies() {
     const ips = [];
