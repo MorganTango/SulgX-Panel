@@ -2763,17 +2763,17 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
         if username:
             proxy = proxy.with_auth(username, password)
 
-        sock = await proxy.connect(dest_host="1.1.1.1", dest_port=80)
+        sock = await proxy.connect(dest_host="httpbin.org", dest_port=80)
         reader, writer = await asyncio.open_connection(sock=sock)
-        writer.write(b"GET / HTTP/1.0\r\nHost: 1.1.1.1\r\n\r\n")
+        writer.write(b"GET /ip HTTP/1.0\r\nHost: httpbin.org\r\n\r\n")
         await writer.drain()
-        response = await asyncio.wait_for(reader.read(100), timeout=5.0)
+        response = await asyncio.wait_for(reader.read(500), timeout=5.0)
         writer.close()
         await writer.wait_closed()
-        if response:
-            return {"ok": True, "message": "Proxy is working"}
+        if b'"origin"' in response:
+            return {"ok": True, "message": "Proxy is working (verified via httpbin.org/ip)"}
         else:
-            raise HTTPException(status_code=502, detail="No response from proxy")
+            raise HTTPException(status_code=502, detail="No valid response from proxy")
     except Exception as e:
         logger.error(f"Proxy test failed for id={pid}: {e}")
         raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
@@ -2982,6 +2982,7 @@ async def list_links(request: Request, _=Depends(require_auth)):
             "fingerprint": extra["fingerprint"],
             "alpn": extra["alpn"],
             "port": extra["port"],
+            "proxy_line_id": row.get("proxy_line_id")
         })
     return {"links": result}
 
@@ -8762,10 +8763,12 @@ function showEditMo(uid){
   loadIpProfilesForSelectEdit(l.ip_profile_id || '');
   $m('enaming-mode').value = l.naming_mode || 'default';
   $m('et').textContent=(lang==='fa'?'ویرایش: ':'EDIT: ')+l.label;
-  loadProxyOptions();
+    loadProxyOptions();
   setTimeout(() => {
       if (l.proxy_line_id) {
           $m('proxy-line-select').value = l.proxy_line_id;
+      } else {
+          $m('proxy-line-select').value = '';
       }
   }, 200);
   $m('mo-edit').classList.add('show');
@@ -10239,6 +10242,7 @@ async function loadProxyOptions() {
 </body>
 </html>"""
 
+# ------------------ Proxy Lines API ------------------
 @app.get("/api/proxy-lines")
 async def list_proxy_lines(_=Depends(require_auth)):
     rows = await db_fetchall("SELECT * FROM proxy_lines ORDER BY id",
@@ -10302,7 +10306,6 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=404, detail="Proxy not found")
 
     try:
-        from python_socks.async_.asyncio import Proxy
         proxy_type = proxy_row["type"]
         proxy_host = proxy_row["host"]
         proxy_port = int(proxy_row["port"])
@@ -10313,21 +10316,22 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
         if username:
             proxy = proxy.with_auth(username, password)
 
-        sock = await proxy.connect(dest_host="1.1.1.1", dest_port=80)
+        sock = await proxy.connect(dest_host="httpbin.org", dest_port=80)
         reader, writer = await asyncio.open_connection(sock=sock)
-        writer.write(b"GET / HTTP/1.0\r\nHost: 1.1.1.1\r\n\r\n")
+        writer.write(b"GET /ip HTTP/1.0\r\nHost: httpbin.org\r\n\r\n")
         await writer.drain()
-        response = await asyncio.wait_for(reader.read(100), timeout=5.0)
+        response = await asyncio.wait_for(reader.read(500), timeout=5.0)
         writer.close()
         await writer.wait_closed()
-        if response:
-            return {"ok": True, "message": "Proxy is working"}
+        if b'"origin"' in response:
+            return {"ok": True, "message": "Proxy is working (verified via httpbin.org/ip)"}
         else:
-            raise HTTPException(status_code=502, detail="No response from proxy")
+            raise HTTPException(status_code=502, detail="No valid response from proxy")
     except Exception as e:
         logger.error(f"Proxy test failed for id={pid}: {e}")
         raise HTTPException(status_code=502, detail=f"Proxy test failed: {e}")
 
+# -------------------- Panel HTML endpoints --------------------
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     prefix_row = await db_fetchone("SELECT value FROM settings WHERE key='panel_prefix'",
@@ -10355,6 +10359,7 @@ async def panel_page(request: Request):
         raise HTTPException(status_code=404)
     return HTMLResponse(content=PANEL_HTML)
 
+# -------------------- Catch‑all XHTTP Router --------------------
 @app.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"])
 async def dynamic_xhttp_router(full_path: str, request: Request):
     """
@@ -10406,7 +10411,7 @@ async def dynamic_xhttp_router(full_path: str, request: Request):
         elif len(parts) == 2:
             parts = []
         else:
-            parts = parts[1:] 
+            parts = parts[1:]
 
     if len(parts) == 1:
         session_id = parts[0]
