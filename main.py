@@ -454,6 +454,7 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("login_logs", "city", "TEXT DEFAULT ''")
             await ensure_column_pg("login_logs", "isp", "TEXT DEFAULT ''")
             await ensure_column_pg("login_logs", "org", "TEXT DEFAULT ''")
+            await ensure_column_pg("proxy_lines", "flag", "TEXT DEFAULT ''")
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
         async with pg_pool.acquire() as conn:
@@ -620,6 +621,7 @@ else:
         await ensure_column_sqlite("login_logs", "isp", "TEXT DEFAULT ''")
         await ensure_column_sqlite("login_logs", "org", "TEXT DEFAULT ''")
         await ensure_column_sqlite("links", "proxy_line_id", "INTEGER REFERENCES proxy_lines(id) ON DELETE SET NULL")
+        await ensure_column_sqlite("proxy_lines", "flag", "TEXT DEFAULT ''")
 
         await db_conn.commit()
 
@@ -7375,29 +7377,34 @@ textarea.fi { resize: vertical; min-height: 130px; }
         <div class="empty" id="lempty" style="display:none;padding:30px;">No inbounds found</div>
       </div>
       <div class="card" style="margin-top:20px;">
-        <div class="card-hd">
-          <span class="card-title" data-en="Proxy Lines" data-fa="پروکسی لاین">Proxy Lines</span>
-          <div style="display:flex; gap:6px;">
-            <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
-            <button class="btn btn-outline btn-sm" onclick="testAllProxies()" data-en="Test All" data-fa="تست همه">Test All</button>
-          </div>
-        </div>
-        <div class="tbl-wrap">
-          <table class="tbl" id="proxy-lines-table">
-            <thead>
-              <tr>
-                <th data-en="Name" data-fa="نام">Name</th>
-                <th>Type</th>
-                <th>Host:Port</th>
-                <th data-en="Status" data-fa="وضعیت">Status</th>
-                <th data-en="Health" data-fa="سلامت">Health</th>
-                <th data-en="Actions" data-fa="عملیات">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="proxy-lines-tbody"></tbody>
-          </table>
-        </div>
-      </div>
+  <div class="card-hd">
+    <span class="card-title" data-en="Proxy Lines" data-fa="پروکسی لاین">Proxy Lines</span>
+    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
+      <button class="btn btn-outline btn-sm" onclick="testAllProxies()" data-en="Test All" data-fa="تست همه">Test All</button>
+      <button class="btn btn-outline btn-sm" onclick="resolveProxyFlags()">🌍 Resolve Flags</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteFailedProxies()">🗑️ Delete Failed</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSelectedProxies()">🗑️ Delete Selected</button>
+      <button class="btn btn-outline btn-sm" onclick="copySelectedProxies()">📋 Copy Selected</button>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table class="tbl" id="proxy-lines-table">
+      <thead>
+        <tr>
+          <th><input type="checkbox" id="select-all-proxies" onchange="toggleSelectAllProxies()"></th>
+          <th data-en="Name" data-fa="نام">Name</th>
+          <th>Type</th>
+          <th>Host:Port</th>
+          <th data-en="Status" data-fa="وضعیت">Status</th>
+          <th data-en="Health" data-fa="سلامت">Health</th>
+          <th data-en="Actions" data-fa="عملیات">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="proxy-lines-tbody"></tbody>
+    </table>
+  </div>
+</div>
     </section>
     <section class="page" id="page-addresses">
       <div class="page-header"><div class="page-title" data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</div></div>
@@ -10314,6 +10321,8 @@ async function saveBlockedDomains() {
     } catch { toast('Error', true); }
 }
 
+let selectedProxyIds = new Set();
+
 async function loadProxyLines() {
     try {
         const r = await authenticatedFetch('/api/proxy-lines');
@@ -10325,12 +10334,16 @@ async function loadProxyLines() {
 function renderProxyLines(lines) {
     const tbody = $m('proxy-lines-tbody');
     if (!lines.length) {
-        tbody.innerHTML = '<tr><td colspan="6">No proxy lines defined</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">No proxy lines defined</td></tr>';
         return;
     }
-    tbody.innerHTML = lines.map(p => `
-        <tr>
-            <td>${esc(p.name)}</td>
+    tbody.innerHTML = lines.map(p => {
+        const checked = selectedProxyIds.has(p.id) ? 'checked' : '';
+        const flagEmoji = p.flag ? codeToFlag(p.flag) : '';
+        return `
+        <tr id="proxy-row-${p.id}">
+            <td><input type="checkbox" ${checked} onchange="toggleSelectProxy(${p.id})"></td>
+            <td>${flagEmoji} ${esc(p.name)}</td>
             <td>${p.type.toUpperCase()}</td>
             <td>${esc(p.host)}:${p.port}</td>
             <td><span class="tag ${p.is_active ? 'tag-on' : 'tag-off'}">${p.is_active ? 'On' : 'Off'}</span></td>
@@ -10340,8 +10353,89 @@ function renderProxyLines(lines) {
                 <button class="act-btn act-del" onclick="deleteProxy(${p.id})">🗑️</button>
                 <button class="act-btn act-sub" onclick="testProxyDirect(${p.id})">🔍</button>
             </td>
-        </tr>
-    `).join('');
+        </tr>`;
+    }).join('');
+    selectedProxyIds.forEach(id => {
+        if (!lines.find(p => p.id === id)) selectedProxyIds.delete(id);
+    });
+}
+
+function toggleSelectProxy(id) {
+    selectedProxyIds.has(id) ? selectedProxyIds.delete(id) : selectedProxyIds.add(id);
+}
+
+function toggleSelectAllProxies() {
+    const allCheck = $m('select-all-proxies').checked;
+    const rows = document.querySelectorAll('#proxy-lines-tbody input[type="checkbox"]');
+    rows.forEach(cb => {
+        cb.checked = allCheck;
+        const id = parseInt(cb.closest('tr').id.replace('proxy-row-', ''));
+        if (allCheck) selectedProxyIds.add(id); else selectedProxyIds.delete(id);
+    });
+}
+
+async function deleteSelectedProxies() {
+    if (selectedProxyIds.size === 0) return toast('No proxy selected', true);
+    if (!confirm('Delete selected proxies?')) return;
+    const ids = Array.from(selectedProxyIds);
+    try {
+        await authenticatedFetch('/api/proxy-lines/bulk-delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ids })
+        });
+        selectedProxyIds.clear();
+        loadProxyLines();
+        toast('Deleted');
+    } catch(e) { toast('Error', true); }
+}
+
+async function deleteFailedProxies() {
+    const failedIds = [];
+    document.querySelectorAll('#proxy-lines-tbody tr').forEach(row => {
+        const statusEl = row.querySelector('[id^="proxy-status-"]');
+        if (statusEl && statusEl.textContent.includes('❌')) {
+            const id = parseInt(row.id.replace('proxy-row-', ''));
+            failedIds.push(id);
+        }
+    });
+    if (failedIds.length === 0) return toast('No failed proxies', true);
+    if (!confirm(`Delete ${failedIds.length} failed proxies?`)) return;
+    try {
+        await authenticatedFetch('/api/proxy-lines/bulk-delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ids: failedIds })
+        });
+        loadProxyLines();
+        toast(`Deleted ${failedIds.length} proxies`);
+    } catch(e) { toast('Error', true); }
+}
+
+function copySelectedProxies() {
+    const ips = [];
+    document.querySelectorAll('#proxy-lines-tbody tr').forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) {
+            const hostPort = row.querySelector('td:nth-child(4)').textContent.trim();
+            ips.push(hostPort);
+        }
+    });
+    if (ips.length === 0) return toast('No proxy selected', true);
+    copyToClipboard(ips.join('\n'));
+    toast('Copied');
+}
+
+async function resolveProxyFlags() {
+    const btn = document.querySelector('[onclick="resolveProxyFlags()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Resolving...'; }
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines/resolve-flags', { method: 'POST' });
+        const d = await r.json();
+        toast(`Flags resolved for ${d.resolved} proxies`);
+        loadProxyLines();
+    } catch(e) { toast('Error', true); }
+    if (btn) { btn.disabled = false; btn.textContent = '🌍 Resolve Flags'; }
 }
 
 async function testProxyDirect(pid) {
@@ -10517,8 +10611,8 @@ async function testAllProxies() {
         const r = await authenticatedFetch('/api/proxy-lines/test-all', {method:'POST'});
         const d = await r.json();
         if (d.results) {
-            d.results.forEach(res => {
-                const id = res.id;
+            const resultMap = new Map(d.results.map(res => [res.id, res]));
+            resultMap.forEach((res, id) => {
                 const statusEl = $m('proxy-status-' + id);
                 if (statusEl) {
                     if (res.ok) {
@@ -10528,6 +10622,18 @@ async function testAllProxies() {
                     }
                 }
             });
+            const tbody = $m('proxy-lines-tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            rows.sort((a, b) => {
+                const idA = parseInt(a.id.replace('proxy-row-', ''));
+                const idB = parseInt(b.id.replace('proxy-row-', ''));
+                const resA = resultMap.get(idA) || {};
+                const resB = resultMap.get(idB) || {};
+                const latA = resA.ok ? resA.latency_ms : Infinity;
+                const latB = resB.ok ? resB.latency_ms : Infinity;
+                return latA - latB;
+            });
+            rows.forEach(row => tbody.appendChild(row));
         }
         toast('All proxies tested');
     } catch(e) {
@@ -10637,6 +10743,53 @@ async def create_proxy_lines_bulk(request: Request, _=Depends(require_auth)):
         except Exception:
             errors += 1
     return {"ok": True, "added": added, "errors": errors}
+
+@app.post("/api/proxy-lines/bulk-delete")
+@limiter.limit("5/minute")
+async def bulk_delete_proxy_lines(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    ids = body.get("ids", [])
+    if not isinstance(ids, list) or not ids:
+        raise HTTPException(status_code=400, detail="List of IDs required")
+    placeholders = ','.join(['?'] * len(ids))
+    await db_execute(
+        f"DELETE FROM proxy_lines WHERE id IN ({placeholders})",
+        f"DELETE FROM proxy_lines WHERE id = ANY($1)",
+        (ids,) if DB_BACKEND == "sqlite" else (ids,)
+    )
+    return {"ok": True, "deleted": len(ids)}
+
+@app.post("/api/proxy-lines/resolve-flags")
+@limiter.limit("2/minute")
+async def resolve_proxy_flags(request: Request, _=Depends(require_auth)):
+    rows = await db_fetchall("SELECT id, host FROM proxy_lines", "SELECT id, host FROM proxy_lines")
+    if not rows:
+        return {"resolved": 0}
+    sem = asyncio.Semaphore(45) 
+    async def fetch_flag(proxy_id, host):
+        async with sem:
+            try:
+                ip = host.split(':')[0]
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(f"http://ip-api.com/json/{ip}?fields=countryCode")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        code = data.get("countryCode", "")
+                        if code:
+                            await db_execute(
+                                "UPDATE proxy_lines SET flag = ? WHERE id = ?",
+                                "UPDATE proxy_lines SET flag = $1 WHERE id = $2",
+                                (code, proxy_id)
+                            )
+                            return code
+            except Exception:
+                pass
+            return None
+
+    tasks = [fetch_flag(r["id"], r["host"]) for r in rows]
+    results = await asyncio.gather(*tasks)
+    resolved = sum(1 for r in results if r)
+    return {"resolved": resolved}
 
 @app.post("/api/proxy-lines/test-all")
 async def test_all_proxy_lines(_=Depends(require_auth)):
