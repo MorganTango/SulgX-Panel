@@ -10467,7 +10467,7 @@ async function importProxiesBulk() {
     const raw = $m('proxy-bulk').value.trim();
     if (!raw) return toast('No data', true);
     const lines = raw.split('\n').map(l => l.trim()).filter(l => l);
-    let added = 0;
+    const proxies = [];
     for (const line of lines) {
         let host = '', port = 1080, user = '', pass = '', type = 'socks5';
         let cleanLine = line;
@@ -10491,26 +10491,23 @@ async function importProxiesBulk() {
         if (hostParts.length >= 2) port = parseInt(hostParts[1]) || 1080;
         if (!host) continue;
         const name = user ? `${host}:${port} (${user})` : `${host}:${port}`;
-        try {
-            const r = await authenticatedFetch('/api/proxy-lines', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: name,
-                    type: type,
-                    host: host,
-                    port: port,
-                    username: user,
-                    password: pass,
-                    is_active: 1
-                })
-            });
-            if (r.ok) added++;
-        } catch(e) {}
+        proxies.push({ name, type, host, port, username: user, password: pass, is_active: 1 });
     }
-    toast(`Added ${added} proxies`);
-    $m('proxy-bulk').value = '';
-    loadProxyLines();
+    if (!proxies.length) return toast('No valid proxies', true);
+
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ proxies })
+        });
+        const d = await r.json();
+        toast(`Added ${d.added} proxies` + (d.errors ? ` (${d.errors} errors)` : ''));
+        $m('proxy-bulk').value = '';
+        loadProxyLines();
+    } catch(e) {
+        toast('Bulk import failed', true);
+    }
 }
 
 async function testAllProxies() {
@@ -10607,6 +10604,39 @@ async def test_proxy_line(pid: int, request: Request, _=Depends(require_auth)):
         raise HTTPException(status_code=404, detail="Proxy not found")
     result = await perform_proxy_test(proxy_row)
     return result
+
+@app.post("/api/proxy-lines/bulk")
+@limiter.limit("2/minute")
+async def create_proxy_lines_bulk(request: Request, _=Depends(require_auth)):
+    body = await request.json()
+    items = body.get("proxies", [])
+    if not isinstance(items, list) or len(items) == 0:
+        raise HTTPException(status_code=400, detail="List of proxies required")
+    added = 0
+    errors = 0
+    for item in items:
+        name = (item.get("name") or "").strip()
+        if not name:
+            errors += 1
+            continue
+        proxy_type = item.get("type", "socks5")
+        host = (item.get("host") or "").strip()
+        port = int(item.get("port") or 0)
+        if not host or port <= 0:
+            errors += 1
+            continue
+        username = item.get("username", "")
+        password = item.get("password", "")
+        try:
+            await db_execute(
+                "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES (?,?,?,?,?,?)",
+                "INSERT INTO proxy_lines (name, type, host, port, username, password) VALUES ($1,$2,$3,$4,$5,$6)",
+                (name, proxy_type, host, port, username, password)
+            )
+            added += 1
+        except Exception:
+            errors += 1
+    return {"ok": True, "added": added, "errors": errors}
 
 @app.post("/api/proxy-lines/test-all")
 async def test_all_proxy_lines(_=Depends(require_auth)):
