@@ -10554,10 +10554,12 @@ async function loadProxyOptionsCreate() {
         const r = await authenticatedFetch('/api/proxy-lines');
         const data = await r.json();
         const sel = $m('proxy-line-select-create');
-        sel.innerHTML = '<option value="">None (Direct)</option>';
+        sel.innerHTML = `<option value="">${t('None (Direct)')}</option>`;
         data.proxy_lines.forEach(p => {
             const disabled = !p.is_active ? ' disabled' : '';
-            sel.innerHTML += `<option value="${p.id}"${disabled}>${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})${!p.is_active ? ' (inactive)' : ''}</option>`;
+            const flagEmoji = p.flag ? codeToFlag(p.flag) : '';
+            const pingInfo = p.last_test_status === 'ok' ? ` (${p.last_latency_ms}ms)` : '';
+            sel.innerHTML += `<option value="${p.id}"${disabled}>${flagEmoji} ${esc(p.name)}${pingInfo}${!p.is_active ? ' (' + t('inactive') + ')' : ''}</option>`;
         });
     } catch(e) {}
 }
@@ -10567,10 +10569,12 @@ async function loadProxyOptionsEdit() {
         const r = await authenticatedFetch('/api/proxy-lines');
         const data = await r.json();
         const sel = $m('proxy-line-select-edit');
-        sel.innerHTML = '<option value="">None (Direct)</option>';
+        sel.innerHTML = `<option value="">${t('None (Direct)')}</option>`;
         data.proxy_lines.forEach(p => {
             const disabled = !p.is_active ? ' disabled' : '';
-            sel.innerHTML += `<option value="${p.id}"${disabled}>${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})${!p.is_active ? ' (inactive)' : ''}</option>`;
+            const flagEmoji = p.flag ? codeToFlag(p.flag) : '';
+            const pingInfo = p.last_test_status === 'ok' ? ` (${p.last_latency_ms}ms)` : '';
+            sel.innerHTML += `<option value="${p.id}"${disabled}>${flagEmoji} ${esc(p.name)}${pingInfo}${!p.is_active ? ' (' + t('inactive') + ')' : ''}</option>`;
         });
     } catch(e) {}
 }
