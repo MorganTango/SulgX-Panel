@@ -8676,16 +8676,25 @@ async function createLink(){
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
-function showEditMo(uid){
-  const l=allLinks.find(x=>x.uuid===uid); if(!l)return;
-  $m('eu').value=uid; $m('euuid').value=l.uuid; $m('en2').value=l.label;
-  $m('el').value=l.limit_bytes>0?(l.limit_bytes/1073741824):''; $m('ec').value=l.max_connections||''; $m('ed').value='';
-  $m('ep').value=l.custom_path||''; $m('esni').value=l.custom_sni||''; $m('ehost').value=l.custom_host||'';
-  $m('e-color').value=l.color||'#39ff14';
+async function showEditMo(uid) {
+  const l = allLinks.find(x => x.uuid === uid);
+  if (!l) return;
+
+  $m('eu').value = uid;
+  $m('euuid').value = l.uuid;
+  $m('en2').value = l.label;
+  $m('el').value = l.limit_bytes > 0 ? (l.limit_bytes / 1073741824) : '';
+  $m('ec').value = l.max_connections || '';
+  $m('ed').value = '';
+  $m('ep').value = l.custom_path || '';
+  $m('esni').value = l.custom_sni || '';
+  $m('ehost').value = l.custom_host || '';
+  $m('e-color').value = l.color || '#39ff14';
+
   const flag = l.flag || '';
   $m('flag-code-edit').value = flag;
   const sel = $m('flag-select-edit');
-  if (flag && ['cn','nl','ru','us','ca','ir','de','gb','it','fr','tr','ae'].includes(flag)) {
+  if (flag && ['cn', 'nl', 'ru', 'us', 'ca', 'ir', 'de', 'gb', 'it', 'fr', 'tr', 'ae'].includes(flag)) {
     sel.value = flag;
     $m('flag-custom-edit').style.display = 'none';
   } else if (flag) {
@@ -8696,38 +8705,49 @@ function showEditMo(uid){
     sel.value = '';
     $m('flag-custom-edit').style.display = 'none';
   }
-  if(l.tfo) $m('tfo-edit').classList.add('on'); else $m('tfo-edit').classList.remove('on');
-  if(l.ech_enabled){
+
+  if (l.tfo) $m('tfo-edit').classList.add('on');
+  else $m('tfo-edit').classList.remove('on');
+
+  if (l.ech_enabled) {
     $m('ech-edit').classList.add('on');
-    $m('ech-edit-fields').style.display='block';
-    $m('ech-sni-edit').value=l.ech_sni||'';
-    $m('ech-doh-edit').value=l.ech_doh||'';
+    $m('ech-edit-fields').style.display = 'block';
+    $m('ech-sni-edit').value = l.ech_sni || '';
+    $m('ech-doh-edit').value = l.ech_doh || '';
   } else {
     $m('ech-edit').classList.remove('on');
-    $m('ech-edit-fields').style.display='none';
+    $m('ech-edit-fields').style.display = 'none';
   }
-  if(l.allow_insecure) $m('insecure-edit').classList.add('on'); else $m('insecure-edit').classList.remove('on');
-  if(l.random_path) $m('random-edit').classList.add('on'); else $m('random-edit').classList.remove('on');
-  if(l.smux_enabled) $m('smux-edit').classList.add('on'); else $m('smux-edit').classList.remove('on');
+
+  if (l.allow_insecure) $m('insecure-edit').classList.add('on');
+  else $m('insecure-edit').classList.remove('on');
+
+  if (l.random_path) $m('random-edit').classList.add('on');
+  else $m('random-edit').classList.remove('on');
+
+  if (l.smux_enabled) $m('smux-edit').classList.add('on');
+  else $m('smux-edit').classList.remove('on');
+
   $m('eip-limit').value = l.ip_limit || 0;
   $m('eprotocol').value = l.protocol || 'vless-ws';
+
   const currentFp = l.fingerprint || 'chrome';
   const fpSel = $m('efingerprint-sel');
   const fpCustom = $m('efingerprint-custom');
   const fpHidden = $m('efingerprint');
   if (!currentFp || currentFp.toLowerCase() === 'none') {
-      fpSel.value = 'none';
-      fpCustom.style.display = 'none';
-      fpHidden.value = '';
-  } else if (['chrome','firefox','safari','ios','android','edge','360','qq','random','randomized'].includes(currentFp)) {
-      fpSel.value = currentFp;
-      fpCustom.style.display = 'none';
-      fpHidden.value = currentFp;
+    fpSel.value = 'none';
+    fpCustom.style.display = 'none';
+    fpHidden.value = '';
+  } else if (['chrome', 'firefox', 'safari', 'ios', 'android', 'edge', '360', 'qq', 'random', 'randomized'].includes(currentFp)) {
+    fpSel.value = currentFp;
+    fpCustom.style.display = 'none';
+    fpHidden.value = currentFp;
   } else {
-      fpSel.value = 'custom';
-      fpCustom.style.display = 'block';
-      fpCustom.value = currentFp;
-      fpHidden.value = currentFp;
+    fpSel.value = 'custom';
+    fpCustom.style.display = 'block';
+    fpCustom.value = currentFp;
+    fpHidden.value = currentFp;
   }
 
   const currentAlpn = l.alpn || '';
@@ -8735,89 +8755,116 @@ function showEditMo(uid){
   const alpnCustom = $m('ealpn-custom');
   const alpnHidden = $m('ealpn');
   if (!currentAlpn) {
-      alpnSel.value = '';
-      alpnCustom.style.display = 'none';
-      alpnHidden.value = '';
-  } else if (['http/1.1','h2,http/1.1','h2'].includes(currentAlpn)) {
-      alpnSel.value = currentAlpn;
-      alpnCustom.style.display = 'none';
-      alpnHidden.value = currentAlpn;
+    alpnSel.value = '';
+    alpnCustom.style.display = 'none';
+    alpnHidden.value = '';
+  } else if (['http/1.1', 'h2,http/1.1', 'h2'].includes(currentAlpn)) {
+    alpnSel.value = currentAlpn;
+    alpnCustom.style.display = 'none';
+    alpnHidden.value = currentAlpn;
   } else {
-      alpnSel.value = 'custom';
-      alpnCustom.style.display = 'block';
-      alpnCustom.value = currentAlpn;
-      alpnHidden.value = currentAlpn;
+    alpnSel.value = 'custom';
+    alpnCustom.style.display = 'block';
+    alpnCustom.value = currentAlpn;
+    alpnHidden.value = currentAlpn;
   }
 
   $m('eport').value = l.port || 443;
-  const fragMode = l.fragment_mode||'off';
+
+  const fragMode = l.fragment_mode || 'off';
   $m('efrag-mode').value = fragMode;
-  if(fragMode==='range'){
-    $m('frag-edit-range').style.display='block';
-    $m('efrag-length').value = l.fragment_length||'100-200';
-    $m('efrag-interval').value = l.fragment_interval||'10-20';
+  if (fragMode === 'range') {
+    $m('frag-edit-range').style.display = 'block';
+    $m('efrag-length').value = l.fragment_length || '100-200';
+    $m('efrag-interval').value = l.fragment_interval || '10-20';
   } else {
-    $m('frag-edit-range').style.display='none';
+    $m('frag-edit-range').style.display = 'none';
   }
-  $m('efrag').value = l.fragment||'';
+  $m('efrag').value = l.fragment || '';
+
   loadIpProfilesForSelectEdit(l.ip_profile_id || '');
   $m('enaming-mode').value = l.naming_mode || 'default';
-  $m('et').textContent=(lang==='fa'?'ویرایش: ':'EDIT: ')+l.label;
-    loadProxyOptions();
-  setTimeout(() => {
-      if (l.proxy_line_id) {
-          $m('proxy-line-select').value = l.proxy_line_id;
-      } else {
-          $m('proxy-line-select').value = '';
-      }
-  }, 200);
+  $m('et').textContent = (lang === 'fa' ? 'ویرایش: ' : 'EDIT: ') + l.label;
+
+  await loadProxyOptions();
+
+  if (l.proxy_line_id) {
+    $m('proxy-line-select').value = l.proxy_line_id;
+  } else {
+    $m('proxy-line-select').value = '';
+  }
+
   $m('mo-edit').classList.add('show');
 }
-async function saveEdit(){
-  const uid=$m('eu').value,v=parseFloat($m('el').value)||0,mc=parseInt($m('ec').value)||0,days=parseInt($m('ed').value)||0;
-  const flagCode=$m('flag-code-edit').value||'';
-  const ipProfileId=$m('eip-profile')?.value||'';
-  const namingMode=$m('enaming-mode')?.value||'default';
-  const tfo=$m('tfo-edit').classList.contains('on');
-  const echEnabled=$m('ech-edit').classList.contains('on');
-  const echSni=echEnabled?($m('ech-sni-edit').value.trim()||''):'';
-  const echDoh=echEnabled?($m('ech-doh-edit').value.trim()||''):'';
-  const allowInsecure=$m('insecure-edit').classList.contains('on');
-  const randomPath=$m('random-edit').classList.contains('on');
-  const smuxEnabled=$m('smux-edit').classList.contains('on');
-  const ipLimit=parseInt($m('eip-limit').value)||0;
-  const protocol=$m('eprotocol').value||'vless-ws';
-  const fingerprint=$m('efingerprint').value||'chrome';
-  const alpn=$m('ealpn').value.trim()||'';
-  const port=parseInt($m('eport').value)||443;
-  const fragMode=$m('efrag-mode').value;
-  let fragment='';
-  if(fragMode==='tlshello') fragment='tlshello';
-  else if(fragMode==='range'){
-    const length=$m('efrag-length').value.trim()||'100-200';
-    fragment=length;
+
+async function saveEdit() {
+  const uid = $m('eu').value;
+  const v = parseFloat($m('el').value) || 0;
+  const mc = parseInt($m('ec').value) || 0;
+  const days = parseInt($m('ed').value) || 0;
+  const flagCode = $m('flag-code-edit').value || '';
+  const ipProfileId = $m('eip-profile')?.value || '';
+  const namingMode = $m('enaming-mode')?.value || 'default';
+  const tfo = $m('tfo-edit').classList.contains('on');
+  const echEnabled = $m('ech-edit').classList.contains('on');
+  const echSni = echEnabled ? ($m('ech-sni-edit').value.trim() || '') : '';
+  const echDoh = echEnabled ? ($m('ech-doh-edit').value.trim() || '') : '';
+  const allowInsecure = $m('insecure-edit').classList.contains('on');
+  const randomPath = $m('random-edit').classList.contains('on');
+  const smuxEnabled = $m('smux-edit').classList.contains('on');
+  const ipLimit = parseInt($m('eip-limit').value) || 0;
+  const protocol = $m('eprotocol').value || 'vless-ws';
+  const fingerprint = $m('efingerprint').value || 'chrome';
+  const alpn = $m('ealpn').value.trim() || '';
+  const port = parseInt($m('eport').value) || 443;
+  const fragMode = $m('efrag-mode').value;
+
+  let fragment = '';
+  if (fragMode === 'tlshello') {
+    fragment = 'tlshello';
+  } else if (fragMode === 'range') {
+    const length = $m('efrag-length').value.trim() || '100-200';
+    fragment = length;
   }
-  const body={
-    limit_value:v,limit_unit:'GB',max_connections:mc,label:$m('en2').value.trim(),
-    custom_path:$m('ep').value.trim(),custom_sni:$m('esni').value.trim(),
-    custom_host:$m('ehost').value.trim(),custom_fp:fingerprint,
-    color:$m('e-color').value,flag:flagCode,
-    fragment:fragment,ip_profile_id:ipProfileId,naming_mode:namingMode,
-    tfo:tfo,ech_enabled:echEnabled,ech_sni:echSni,ech_doh:echDoh,
-    fragment_mode:fragMode,fragment_length:$m('efrag-length').value.trim()||'100-200',
-    fragment_interval:$m('efrag-interval').value.trim()||'10-20',
-    allow_insecure:allowInsecure,random_path:randomPath,
-    smux_enabled:smuxEnabled,ip_limit:ipLimit,
-    protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port,
+
+  const body = {
+    limit_value: v,
+    limit_unit: 'GB',
+    max_connections: mc,
+    label: $m('en2').value.trim(),
+    custom_path: $m('ep').value.trim(),
+    custom_sni: $m('esni').value.trim(),
+    custom_host: $m('ehost').value.trim(),
+    custom_fp: fingerprint,
+    color: $m('e-color').value,
+    flag: flagCode,
+    fragment: fragment,
+    ip_profile_id: ipProfileId,
+    naming_mode: namingMode,
+    tfo: tfo,
+    ech_enabled: echEnabled,
+    ech_sni: echSni,
+    ech_doh: echDoh,
+    fragment_mode: fragMode,
+    fragment_length: $m('efrag-length').value.trim() || '100-200',
+    fragment_interval: $m('efrag-interval').value.trim() || '10-20',
+    allow_insecure: allowInsecure,
+    random_path: randomPath,
+    smux_enabled: smuxEnabled,
+    ip_limit: ipLimit,
+    protocol: protocol,
+    fingerprint: fingerprint,
+    alpn: alpn,
+    port: port,
     proxy_line_id: parseInt($m('proxy-line-select').value) || null
   };
-  if(days)body.days_valid=days;
+  if (days) body.days_valid = days;
 
   try {
-    const r = await authenticatedFetch('/api/links/'+uid, {
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(body)
+    const r = await authenticatedFetch('/api/links/' + uid, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     });
     const data = await r.json();
     if (!r.ok) {
@@ -8831,29 +8878,80 @@ async function saveEdit(){
     toast('Updated');
     $m('mo-edit').classList.remove('show');
     loadLinks();
-  } catch(e) {
+  } catch (e) {
     toast('Error: ' + (e.message || 'Network error'), true);
   }
 }
-async function resetTraf(){const uid=$m('eu').value;if(!confirm('Reset?'))return;try{await authenticatedFetch('/api/links/'+uid,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({reset_usage:true})});toast('Reset');loadLinks();}catch{toast('Error',true);}}
-async function delLink(uid){if(!confirm('Delete?'))return;try{const r=await authenticatedFetch('/api/links/'+uid,{method:'DELETE'});if(!r.ok){const d=await r.json();toast(d.detail||'Error',true);}else{toast('Deleted');loadLinks();loadStats();}}catch{toast('Error',true);}}
-function cpLink(txt){copyToClipboard(txt);}
-async function cpSub(uid){
-    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
-    copyToClipboard('https://' + location.host + prefix + '/user/' + uid);
+
+async function resetTraf() {
+  const uid = $m('eu').value;
+  if (!confirm('Reset?')) return;
+  try {
+    await authenticatedFetch('/api/links/' + uid, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset_usage: true })
+    });
+    toast('Reset');
+    loadLinks();
+  } catch {
+    toast('Error', true);
+  }
 }
-function showQR(txt){if(txt.length>2000){toast('Link too long for QR',true);return;}const img=$m('qr-img');img.src='https://api.qrserver.com/v1/create-qr-code/?size=280x280&data='+encodeURIComponent(txt);$m('mo-qr').classList.add('show');}
-function dlQR(){const a=document.createElement('a');a.href=$m('qr-img').src;a.download='sulgx-qr.png';a.click();}
+
+async function delLink(uid) {
+  if (!confirm('Delete?')) return;
+  try {
+    const r = await authenticatedFetch('/api/links/' + uid, { method: 'DELETE' });
+    if (!r.ok) {
+      const d = await r.json();
+      toast(d.detail || 'Error', true);
+    } else {
+      toast('Deleted');
+      loadLinks();
+      loadStats();
+    }
+  } catch {
+    toast('Error', true);
+  }
+}
+
+function cpLink(txt) {
+  copyToClipboard(txt);
+}
+
+async function cpSub(uid) {
+  const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
+  copyToClipboard('https://' + location.host + prefix + '/user/' + uid);
+}
+
+function showQR(txt) {
+  if (txt.length > 2000) {
+    toast('Link too long for QR', true);
+    return;
+  }
+  const img = $m('qr-img');
+  img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(txt);
+  $m('mo-qr').classList.add('show');
+}
+
+function dlQR() {
+  const a = document.createElement('a');
+  a.href = $m('qr-img').src;
+  a.download = 'sulgx-qr.png';
+  a.click();
+}
 
 function updateSpeedDisplaySafe(id, bps) {
   const el = $m(id);
   if (el) el.innerHTML = formatSpeed(bps);
 }
-async function loadStats(){
-  if (!isAuthenticated) return; 
-  try{
+
+async function loadStats() {
+  if (!isAuthenticated) return;
+  try {
     const r = await authenticatedFetch('/stats');
-    if(!r.ok) return;
+    if (!r.ok) return;
     sData = await r.json();
 
     const now = Date.now();
@@ -8916,7 +9014,7 @@ async function loadStats(){
 
     updChart();
     updDoughnutChart();
-  } catch(err) {
+  } catch (err) {
     console.error('loadStats error:', err);
   }
 }
