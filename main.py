@@ -4145,7 +4145,15 @@ h1{{color:var(--primary); font-size:1.8rem; font-weight:800; letter-spacing:-0.5
 .btn-outline:hover{{background:var(--primary-glass); border-color:var(--primary); color:var(--primary); box-shadow:0 0 28px var(--primary-dim);}}
 #toast{{position:fixed; bottom:40px; left:50%; transform:translateX(-50%); background:var(--surface); color:var(--text); border:1px solid var(--border2); border-radius:var(--radius-md); padding:14px 30px; font-weight:600; opacity:0; transition:all 0.45s ease; z-index:999; backdrop-filter:blur(30px); box-shadow:var(--shadow-soft); pointer-events:none;}}
 #toast.show{{opacity:1; transform:translateX(-50%) translateY(0); pointer-events:auto;}}
-.daily-chart{{margin-top:16px; grid-column:span 2;}}
+.daily-chart{{
+  margin-top:16px;
+  grid-column:span 2;
+  height: 200px;
+}}
+.daily-chart canvas{{
+  height: 200px !important;
+  width: 100% !important;
+}}
 @media(max-width:600px){{
   .card{{padding:24px 16px;}}
   .actions-grid{{grid-template-columns:1fr;}}
@@ -4289,7 +4297,7 @@ if (dailyData.length > 0) {{
                 backgroundColor: '#39ff14'
             }}]
         }},
-        options: {{ responsive: true, plugins: {{ legend: {{ display: false }} }} }}
+        options: {{ responsive: true, maintainAspectRatio: false, plugins: {{ legend: {{ display: false }} }} }}
     }});
 }}
 </script>
