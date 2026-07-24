@@ -7711,7 +7711,7 @@ example.com
     <div class="fg"><label class="fl" data-en="Color" data-fa="رنگ">Color</label><input type="color" id="alink-color" value="#39ff14"></div>
     <div class="fg">
       <label class="fl" data-en="Outbound Proxy" data-fa="پروکسی خروجی">Outbound Proxy</label>
-      <select class="fs" id="proxy-line-select">
+      <select class="fs" id="proxy-line-select-create">
         <option value="">None (Direct)</option>
       </select>
     </div>
@@ -7833,7 +7833,7 @@ example.com
     <div class="fg"><label class="fl" data-en="Color" data-fa="رنگ">Color</label><input type="color" id="e-color" value="#39ff14"></div>
     <div class="fg">
       <label class="fl" data-en="Outbound Proxy" data-fa="پروکسی خروجی">Outbound Proxy</label>
-      <select class="fs" id="proxy-line-select">
+      <select class="fs" id="proxy-line-select-edit">
         <option value="">None (Direct)</option>
       </select>
     </div>
@@ -8646,7 +8646,7 @@ async function cloneLink(uid){try{const r=await authenticatedFetch('/api/links/'
 function showAddMo(){
   $m('mo-add').classList.add('show');
   loadIpProfilesForSelect();
-  loadProxyOptions();
+  loadProxyOptionsCreate();
 }
 async function createLink(){
   const label=$m('nl').value.trim()||'User-'+Math.random().toString(36).slice(2,8);
@@ -8686,7 +8686,7 @@ async function createLink(){
     allow_insecure:allowInsecure,random_path:randomPath,
     smux_enabled:smuxEnabled,ip_limit:ipLimit,
     protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port,
-    proxy_line_id: parseInt($m('proxy-line-select').value) || null
+    proxy_line_id: parseInt($m('proxy-line-select-create').value) || null
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
@@ -8801,12 +8801,12 @@ async function showEditMo(uid) {
   $m('enaming-mode').value = l.naming_mode || 'default';
   $m('et').textContent = (lang === 'fa' ? 'ویرایش: ' : 'EDIT: ') + l.label;
 
-  await loadProxyOptions();
+  await loadProxyOptionsEdit();
 
   if (l.proxy_line_id) {
-    $m('proxy-line-select').value = l.proxy_line_id;
+    $m('proxy-line-select-edit').value = l.proxy_line_id;
   } else {
-    $m('proxy-line-select').value = '';
+    $m('proxy-line-select-edit').value = '';
   }
 
   $m('mo-edit').classList.add('show');
@@ -8871,7 +8871,7 @@ async function saveEdit() {
     fingerprint: fingerprint,
     alpn: alpn,
     port: port,
-    proxy_line_id: parseInt($m('proxy-line-select').value) || null
+    proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null
   };
   if (days) body.days_valid = days;
 
@@ -10338,11 +10338,24 @@ async function deleteProxy(pid) {
     }
 }
 
-async function loadProxyOptions() {
+async function loadProxyOptionsCreate() {
     try {
         const r = await authenticatedFetch('/api/proxy-lines');
         const data = await r.json();
-        const sel = $m('proxy-line-select');
+        const sel = $m('proxy-line-select-create');
+        sel.innerHTML = '<option value="">None (Direct)</option>';
+        data.proxy_lines.forEach(p => {
+            const disabled = !p.is_active ? ' disabled' : '';
+            sel.innerHTML += `<option value="${p.id}"${disabled}>${esc(p.name)} (${p.type}: ${esc(p.host)}:${p.port})${!p.is_active ? ' (inactive)' : ''}</option>`;
+        });
+    } catch(e) {}
+}
+
+async function loadProxyOptionsEdit() {
+    try {
+        const r = await authenticatedFetch('/api/proxy-lines');
+        const data = await r.json();
+        const sel = $m('proxy-line-select-edit');
         sel.innerHTML = '<option value="">None (Direct)</option>';
         data.proxy_lines.forEach(p => {
             const disabled = !p.is_active ? ' disabled' : '';
