@@ -7400,10 +7400,10 @@ textarea.fi { resize: vertical; min-height: 130px; }
     <div style="display:flex; gap:6px; flex-wrap:wrap;">
       <button class="btn btn-primary btn-sm" onclick="showAddProxyMo()" data-en="+ Add Proxy" data-fa="+ افزودن پروکسی">+ Add Proxy</button>
       <button class="btn btn-outline btn-sm" onclick="testAllProxies()" data-en="Test All" data-fa="تست همه">Test All</button>
-      <button class="btn btn-outline btn-sm" onclick="resolveProxyFlags()">🌍 Resolve Flags</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteFailedProxies()">🗑️ Delete Failed</button>
-      <button class="btn btn-danger btn-sm" onclick="deleteSelectedProxies()">🗑️ Delete Selected</button>
-      <button class="btn btn-outline btn-sm" onclick="copySelectedProxies()">📋 Copy Selected</button>
+      <button class="btn btn-outline btn-sm" onclick="resolveProxyFlags()" data-en="🌍 Resolve Flags" data-fa="🌍 دریافت پرچم‌ها">🌍 Resolve Flags</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteFailedProxies()" data-en="🗑️ Delete Failed" data-fa="🗑️ حذف خراب‌ها">🗑️ Delete Failed</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteSelectedProxies()" data-en="🗑️ Delete Selected" data-fa="🗑️ حذف انتخاب‌شده">🗑️ Delete Selected</button>
+      <button class="btn btn-outline btn-sm" onclick="copySelectedProxies()" data-en="📋 Copy Selected" data-fa="📋 کپی انتخاب‌شده">📋 Copy Selected</button>
     </div>
   </div>
   <div class="tbl-wrap">
@@ -8014,17 +8014,17 @@ example.com"></textarea>
     <div class="fg"><label class="fl">Port</label><input class="fi" type="number" id="proxy-port"></div>
     <div class="fg"><label class="fl">Username</label><input class="fi" id="proxy-username"></div>
     <div class="fg"><label class="fl">Password</label><input class="fi" type="password" id="proxy-password"></div>
-    <div class="fg"><label class="fl">Active</label><div class="toggle on" id="proxy-active" onclick="this.classList.toggle('on')"></div></div>
+    <div class="fg"><label class="fl" data-en="Active" data-fa="فعال">Active</label><div class="toggle on" id="proxy-active" onclick="this.classList.toggle('on')"></div></div>
     <div class="fg">
       <label class="fl" data-en="Bulk Import (one per line)" data-fa="افزودن گروهی (هر خط یک)">Bulk Import</label>
       <textarea class="fi" id="proxy-bulk" rows="4" placeholder="ip:port:user:pass
 ip:port:user
 ip:port
 host:port@user:pass"></textarea>
-      <button class="btn btn-outline btn-sm" onclick="importProxiesBulk()">Add All</button>
+      <button class="btn btn-outline btn-sm" onclick="importProxiesBulk()" data-en="Add All" data-fa="افزودن همه">Add All</button>
     </div>
-    <button class="btn btn-primary" onclick="saveProxy()" style="width:100%; margin-top:10px;">Save</button>
-    <button class="btn btn-outline btn-sm" onclick="testProxyDirect(document.getElementById('proxy-id').value)" style="width:100%; margin-top:6px;">Test Connection</button>
+    <button class="btn btn-primary" onclick="saveProxy()" style="width:100%; margin-top:10px;" data-en="Save" data-fa="ذخیره">Save</button>
+    <button class="btn btn-outline btn-sm" onclick="testProxyDirect(document.getElementById('proxy-id').value)" style="width:100%; margin-top:6px;" data-en="Test Connection" data-fa="تست اتصال">Test Connection</button>
   </div>
 </div>
 <script>
