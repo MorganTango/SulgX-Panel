@@ -3291,8 +3291,8 @@ async def clone_link(uid: str, _=Depends(require_auth)):
         new_link["created_at"] = datetime.now(timezone.utc).isoformat()
         LINKS[new_uid] = new_link
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
             (new_uid, new_link["label"], new_link["limit_bytes"], 0, new_link["max_connections"], new_link["created_at"], 1, new_link.get("expires_at"), new_link.get("custom_path", ""), new_link.get("custom_sni", ""), new_link.get("custom_host", ""), new_link.get("custom_fp", "chrome"), new_link.get("color", "#39ff14"), new_link.get("flag", ""), new_link.get("fragment", ""), new_link.get("ip_profile_id", ""), new_link.get("naming_mode", "default"), new_link.get("tfo", 0), new_link.get("ech_enabled", 0), new_link.get("ech_sni", ""), new_link.get("ech_doh", ""), new_link.get("fragment_mode", "off"), new_link.get("fragment_length", "100-200"), new_link.get("fragment_interval", "10-20"), new_link.get("allow_insecure", 0), new_link.get("random_path", 0), new_link.get("enable_ipv6", 1), new_link.get("smux_enabled", 0), new_link.get("ip_limit", 0), new_link.get("protocol", "vless-ws"), new_link.get("fingerprint", "chrome"), new_link.get("alpn", ""), new_link.get("port", 443), new_link.get("proxy_line_id")),
         )
         log_event("Inbound", f"Cloned inbound {uid} -> {new_uid}")
@@ -5452,8 +5452,7 @@ async def websocket_tunnel(websocket: WebSocket, uuid: str):
                 if not await gate.check():
                     await websocket.close(code=1008, reason="quota exceeded")
                     return
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(address, port), timeout=10.0)
+            reader, writer = await create_proxied_connection(address, port, link)
             tune_socket(writer)
             if initial_payload:
                 writer.write(initial_payload)
@@ -5671,6 +5670,8 @@ async def xhttp_packet_up(session_id: str, seq: int, request: Request):
 
         sess["uuid"] = user_uuid
         connections[sess["conn_id"]]["uuid"] = user_uuid
+        async with connections_lock:
+            link_ip_map[user_uuid].add(ip)
 
         gate = QuotaGate(user_uuid)
         if payload:
@@ -5681,9 +5682,7 @@ async def xhttp_packet_up(session_id: str, seq: int, request: Request):
         sess["seq_lock"] = asyncio.Lock()
 
         try:
-            reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(target_addr, target_port), timeout=TCP_CONNECT_TIMEOUT
-            )
+            reader, writer = await create_proxied_connection(target_addr, target_port, link)
             tune_socket(writer)
             sess["reader"] = reader
             sess["writer"] = writer
@@ -5691,7 +5690,7 @@ async def xhttp_packet_up(session_id: str, seq: int, request: Request):
 
             sess["tunnel_ready"].set()
             sess["downlink_task"] = asyncio.create_task(
-                _pump_tcp_to_queue(session_id, user_uuid, reader, sess["down_q"])
+                _pump_tcp_to_queue(session_id, user_uuid, reader, sess["down_q"], gate)
             )
             stats["total_requests"] += 1
 
@@ -5796,27 +5795,27 @@ async def xhttp_stream_up(session_id: str, request: Request):
 
             sess["uuid"] = user_uuid
             connections[sess["conn_id"]]["uuid"] = user_uuid
+            async with connections_lock:
+                link_ip_map[user_uuid].add(ip)
             gate = QuotaGate(user_uuid)
             sess["quota_gate"] = gate
 
             try:
-                reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(target_addr, target_port), timeout=TCP_CONNECT_TIMEOUT
-                )
+                reader, writer = await create_proxied_connection(target_addr, target_port, link)
                 tune_socket(writer)
                 sess["reader"] = reader
                 sess["writer"] = writer
                 sess["tcp_open"] = True
                 sess["tunnel_ready"].set()
                 sess["downlink_task"] = asyncio.create_task(
-                    _pump_tcp_to_queue(session_id, user_uuid, reader, sess["down_q"])
+                    _pump_tcp_to_queue(session_id, user_uuid, reader, sess["down_q"], gate)
                 )
 
                 actual_payload_len = len(payload)
-                if not await check_quota(user_uuid, actual_payload_len):
+                if not await gate.add(actual_payload_len):
                     await _teardown_xhttp(session_id)
                     raise HTTPException(status_code=403, detail="quota")
-                await add_usage(user_uuid, actual_payload_len)
+                await gate.flush()
                 stats["total_bytes"] += actual_payload_len
                 stats["upload_bytes"] += actual_payload_len
 
@@ -5832,10 +5831,11 @@ async def xhttp_stream_up(session_id: str, request: Request):
                 await _teardown_xhttp(session_id)
                 raise HTTPException(status_code=502, detail=str(e))
         else:
-            if not await check_quota(sess["uuid"], len(chunk)):
+            gate = sess.get("quota_gate")
+            if not await gate.add(len(chunk)):
                 await _teardown_xhttp(session_id)
                 raise HTTPException(status_code=403, detail="quota")
-            await add_usage(sess["uuid"], len(chunk))
+            await gate.flush()
             stats["total_bytes"] += len(chunk)
             stats["upload_bytes"] += len(chunk)
             sess["writer"].write(chunk)
@@ -5893,9 +5893,7 @@ async def xhttp_stream_one(base_path: str, request: Request):
             raise HTTPException(status_code=403, detail="quota exceeded")
 
     try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(target_addr, target_port), timeout=TCP_CONNECT_TIMEOUT
-        )
+        reader, writer = await create_proxied_connection(target_addr, target_port, link)
         tune_socket(writer)
         if payload:
             stats["total_bytes"] += len(payload)
@@ -5912,6 +5910,8 @@ async def xhttp_stream_one(base_path: str, request: Request):
         "connected_at": datetime.now(timezone.utc).isoformat(),
         "bytes": 0, "transport": "xhttp-stream-one"
     }
+    async with connections_lock:
+        link_ip_map[user_uuid].add(ip)
     down_q = asyncio.Queue(maxsize=DOWNLINK_QUEUE_MAX)
     sess = {
         "uuid": user_uuid,
@@ -5927,7 +5927,7 @@ async def xhttp_stream_one(base_path: str, request: Request):
         xhttp_sessions[session_id] = sess
 
     sess["downlink_task"] = asyncio.create_task(
-        _pump_tcp_to_queue(session_id, user_uuid, reader, down_q)
+        _pump_tcp_to_queue(session_id, user_uuid, reader, down_q, gate)
     )
     stats["total_requests"] += 1
 
@@ -5960,8 +5960,7 @@ async def xhttp_stream_one(base_path: str, request: Request):
     return StreamingResponse(downlink_gen(), headers=resp_headers)
 
 
-async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue):
-    gate = QuotaGate(uuid)
+async def _pump_tcp_to_queue(session_id: str, uuid: str, reader: asyncio.StreamReader, down_q: asyncio.Queue, gate):
     try:
         while True:
             data = await reader.read(XHTTP_BUF)
