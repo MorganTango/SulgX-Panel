@@ -460,6 +460,8 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("links", "xray_dns_mode", "TEXT DEFAULT 'doh'")
             await ensure_column_pg("links", "xray_doh_url", "TEXT DEFAULT ''")
             await ensure_column_pg("links", "xray_allowed_domains", "TEXT DEFAULT ''")
+            await ensure_column_pg("links", "reality_pbk", "TEXT DEFAULT ''")
+            await ensure_column_pg("links", "reality_sid", "TEXT DEFAULT ''")
             
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
@@ -633,6 +635,8 @@ else:
         await ensure_column_sqlite("links", "xray_dns_mode", "TEXT DEFAULT 'doh'")
         await ensure_column_sqlite("links", "xray_doh_url", "TEXT DEFAULT ''")
         await ensure_column_sqlite("links", "xray_allowed_domains", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("links", "reality_pbk", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("links", "reality_sid", "TEXT DEFAULT ''")
 
         await db_conn.commit()
 
@@ -4358,17 +4362,21 @@ async def user_subscription(uid: str, request: Request):
     elif not link["active"]:
         status = "blocked"
     ip_profile_id = link.get("ip_profile_id")
+    addresses = []
+
     if ip_profile_id:
+        profile_exists = False
         async with IP_PROFILES_LOCK:
             if ip_profile_id in IP_PROFILES:
-                rows = await db_fetchall(
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
-                    (ip_profile_id,)
-                )
-                addresses = [dict(r) for r in rows] if rows else []
-            else:
-                addresses = []
+                profile_exists = True
+
+        if profile_exists:
+            rows = await db_fetchall(
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
+                (ip_profile_id,)
+            )
+            addresses = [dict(r) for r in rows] if rows else []
     else:
         async with CUSTOM_ADDRESSES_LOCK:
             addresses = list(CUSTOM_ADDRESSES)
@@ -4417,7 +4425,6 @@ async def user_subscription(uid: str, request: Request):
     log_event("Subscription", f"Subscription accessed for {link['label']} ({uid}) status={status}", ip=request.client.host)
     return Response(content=encoded, headers=headers)
 
-
 @app.get("/sub/{uid}")
 @limiter.limit("10/minute")
 async def subscription_endpoint(uid: str, request: Request):
@@ -4431,19 +4438,24 @@ async def clash_subscription(uid: str, request: Request):
         if not link or not link["active"]:
             raise HTTPException(status_code=404, detail="link not found or disabled")
         link = dict(link)
+
     domain = get_domain(request)
     ip_profile_id = link.get("ip_profile_id")
+    address_entries = []
+
     if ip_profile_id:
+        profile_exists = False
         async with IP_PROFILES_LOCK:
             if ip_profile_id in IP_PROFILES:
-                rows = await db_fetchall(
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
-                    (ip_profile_id,)
-                )
-                address_entries = [dict(r) for r in rows] if rows else []
-            else:
-                address_entries = []
+                profile_exists = True
+
+        if profile_exists:
+            rows = await db_fetchall(
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
+                (ip_profile_id,)
+            )
+            address_entries = [dict(r) for r in rows] if rows else []
     else:
         async with CUSTOM_ADDRESSES_LOCK:
             addresses = list(CUSTOM_ADDRESSES)
@@ -4466,35 +4478,38 @@ async def clash_subscription(uid: str, request: Request):
         if '/' in entry["address"]:
             entry["address"] = entry["address"].split('/')[0]
 
-    used_str = f"Used: {round(link['used_bytes']/1_073_741_824,2)} GB"
-    limit_str = f"{round(link['limit_bytes']/1_073_741_824,2)} GB" if link['limit_bytes'] else "∞"
-    expiry_str = "Never"
-    if link.get("expires_at"):
-        exp = parse_expires_at(link["expires_at"])
-        if exp:
-            days_left = max(0, (exp - datetime.now(timezone.utc)).days)
-            expiry_str = f"{days_left} Days Left"
-
-    proxies = []
-    fragment_str = link.get("fragment", "")
-    fragment_obj = parse_fragment_for_clash(fragment_str) if fragment_str else None
     naming_mode = link.get("naming_mode", "default")
     tfo = link.get("tfo", False)
     ech_enabled = link.get("ech_enabled", False)
     ech_sni = link.get("ech_sni", "")
     ech_doh = link.get("ech_doh", "")
-    allow_insecure = link.get("allow_insecure", False) or request.query_params.get("insecure", "false").lower() == "true"
+    allow_insecure = link.get("allow_insecure", False)
     random_path = link.get("random_path", False)
-    flag_emoji_link = code_to_flag(link.get("flag", ""))
     smux_enabled = link.get("smux_enabled", False)
-    fingerprint = link.get("fingerprint", "chrome")
-    alpn = link.get("alpn", "http/1.1")
+    fingerprint = link.get("fingerprint") or link.get("custom_fp") or "chrome"
     if not fingerprint or fingerprint.lower() == "none":
         fingerprint = None
+    alpn = link.get("alpn", "http/1.1")
     if not alpn:
         alpn = None
     port = link.get("port", 443)
 
+    dns_mode = link.get("xray_dns_mode", "doh")
+    doh_url = link.get("xray_doh_url") or DOH_UPSTREAMS[0] if DOH_UPSTREAMS else "https://cloudflare-dns.com/dns-query"
+    allowed_domains_str = link.get("xray_allowed_domains", "")
+    allowed_domains = [d.strip() for d in allowed_domains_str.split(",") if d.strip()]
+
+    proto = link.get("protocol", "vless-ws")
+    if proto == "vless-ws":
+        network_type = "ws"
+    elif proto.startswith("xhttp-"):
+        network_type = "xhttp"
+    else:
+        network_type = "ws"
+
+    flag_emoji_link = code_to_flag(link.get("flag", ""))
+
+    proxies = []
     for i, entry in enumerate(address_entries):
         addr = entry["address"]
         flag_code = entry.get("flag", "")
@@ -4532,17 +4547,26 @@ async def clash_subscription(uid: str, request: Request):
             "server": addr,
             "port": port,
             "uuid": uid,
-            "network": "ws",
-            "ws-opts": {
-                "path": path,
-                "headers": {"Host": link.get("custom_host") or domain}
-            },
             "tls": True,
             "sni": link.get("custom_sni") or domain,
             "skip-cert-verify": allow_insecure,
             "packet-encoding": "xudp",
             "udp": True
         }
+
+        if network_type == "ws":
+            proxy["network"] = "ws"
+            proxy["ws-opts"] = {
+                "path": path,
+                "headers": {"Host": link.get("custom_host") or domain}
+            }
+        elif network_type == "xhttp":
+            proxy["network"] = "httpupgrade"
+            proxy["httpupgrade-opts"] = {
+                "path": path,
+                "headers": {"Host": link.get("custom_host") or domain}
+            }
+
         if fingerprint:
             proxy["client-fingerprint"] = fingerprint
         if alpn:
@@ -4557,52 +4581,51 @@ async def clash_subscription(uid: str, request: Request):
             proxy["ech"] = {"enable": True, "sni": ech_sni}
             if ech_doh:
                 proxy["ech"]["doh"] = ech_doh
-        if fragment_obj:
-            proxy["fragment"] = fragment_obj
         if smux_enabled:
-            proxy["smux"] = {
-                "enabled": True,
-                "protocol": "smux",
-                "max-connections": 5,
-                "min-streams": 4,
-                "max-streams": 0
-            }
+            proxy["smux"] = {"enabled": True, "protocol": "smux", "max-connections": 5, "min-streams": 4, "max-streams": 0}
         proxies.append(proxy)
 
     proxy_names = [p["name"] for p in proxies]
     proxy_groups = [
-        {
-            "name": "🚀 Select",
-            "type": "select",
-            "proxies": ["♻️ Auto", "DIRECT"] + proxy_names
-        },
-        {
-            "name": "♻️ Auto",
-            "type": "url-test",
-            "proxies": proxy_names,
-            "url": "http://www.gstatic.com/generate_204",
-            "interval": 300,
-            "tolerance": 50
-        }
+        {"name": "🚀 Select", "type": "select", "proxies": ["♻️ Auto", "DIRECT"] + proxy_names},
+        {"name": "♻️ Auto", "type": "url-test", "proxies": proxy_names, "url": "http://www.gstatic.com/generate_204", "interval": 300, "tolerance": 50}
     ]
+
+    rules = []
+    if allowed_domains:
+        for d in allowed_domains:
+            if d.startswith("*."):
+                rules.append(f"DOMAIN-SUFFIX,{d[2:]},🚀 Select")
+            else:
+                rules.append(f"DOMAIN,{d},🚀 Select")
+    rules.append("DOMAIN-SUFFIX,ir,DIRECT")
+    rules.append("GEOIP,IR,DIRECT")
+    rules.append("MATCH,🚀 Select")
+
+    dns_config = {
+        "enable": True,
+        "nameserver": [doh_url],
+        "fallback": ["https://dns.cloudflare.com/dns-query"],
+        "enhanced-mode": "fake-ip",
+        "fake-ip-range": "198.18.0.1/16",
+        "fake-ip-filter": ["*.lan", "*.local", "*.arpa", "*.msftconnecttest.com", "*.msftncsi.com"]
+    }
+
+    if dns_mode == "fakedns":
+        dns_config["enhanced-mode"] = "fake-ip"
+        dns_config["fake-ip-range"] = "198.18.0.1/16"
+    elif dns_mode == "doh":
+        dns_config["enhanced-mode"] = "fake-ip"
+        dns_config["nameserver"] = [doh_url]
 
     clash_config = {
         "mixed-port": 7890,
         "mode": "rule",
         "log-level": "info",
-        "dns": {
-            "enable": True,
-            "nameserver": ["https://dns.alidns.com/dns-query", "https://doh.pub/dns-query"],
-            "fallback": ["https://dns.cloudflare.com/dns-query", "https://dns.google/dns-query"],
-            "enhanced-mode": "fake-ip"
-        },
+        "dns": dns_config,
         "proxies": proxies,
         "proxy-groups": proxy_groups,
-        "rules": [
-            "DOMAIN-SUFFIX,ir,DIRECT",
-            "GEOIP,IR,DIRECT",
-            "MATCH,🚀 Select"
-        ]
+        "rules": rules
     }
 
     if request.query_params.get("adblock", "0") == "1":
@@ -4618,10 +4641,7 @@ async def clash_subscription(uid: str, request: Request):
         }
         clash_config["rules"] = ["RULE-SET,category-ads-all,REJECT"] + clash_config["rules"]
 
-    def none_filter(d):
-        return {k: v for k, v in d.items() if v is not None}
-    clean_config = {k: none_filter(v) if isinstance(v, dict) else v for k, v in clash_config.items()}
-    yaml_content = yaml.dump(clean_config, allow_unicode=True, default_flow_style=False)
+    yaml_content = yaml.dump(clash_config, allow_unicode=True, default_flow_style=False)
     return Response(content=yaml_content, media_type="text/plain")
 
 
@@ -4635,17 +4655,21 @@ async def singbox_subscription(uid: str, request: Request):
 
     domain = get_domain(request)
     ip_profile_id = link.get("ip_profile_id")
+    address_entries = []
+
     if ip_profile_id:
+        profile_exists = False
         async with IP_PROFILES_LOCK:
             if ip_profile_id in IP_PROFILES:
-                rows = await db_fetchall(
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
-                    "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
-                    (ip_profile_id,)
-                )
-                address_entries = [dict(r) for r in rows] if rows else []
-            else:
-                address_entries = []
+                profile_exists = True
+
+        if profile_exists:
+            rows = await db_fetchall(
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = ? ORDER BY sort_number ASC",
+                "SELECT address, flag, name, sort_number FROM profile_addresses WHERE profile_id = $1 ORDER BY sort_number ASC",
+                (ip_profile_id,)
+            )
+            address_entries = [dict(r) for r in rows] if rows else []
     else:
         async with CUSTOM_ADDRESSES_LOCK:
             addresses = list(CUSTOM_ADDRESSES)
@@ -4668,34 +4692,36 @@ async def singbox_subscription(uid: str, request: Request):
         if '/' in entry["address"]:
             entry["address"] = entry["address"].split('/')[0]
 
-    used_str = f"Used: {round(link['used_bytes']/1_073_741_824,2)} GB"
-    limit_str = f"{round(link['limit_bytes']/1_073_741_824,2)} GB" if link['limit_bytes'] else "∞"
-    expiry_str = "Never"
-    if link.get("expires_at"):
-        exp = parse_expires_at(link["expires_at"])
-        if exp:
-            days_left = max(0, (exp - datetime.now(timezone.utc)).days)
-            expiry_str = f"{days_left} Days Left"
-
-    outbounds = []
     naming_mode = link.get("naming_mode", "default")
     tfo = link.get("tfo", False)
     ech_enabled = link.get("ech_enabled", False)
     ech_sni = link.get("ech_sni", "")
     ech_doh = link.get("ech_doh", "")
-    allow_insecure = link.get("allow_insecure", False) or request.query_params.get("insecure", "false").lower() == "true"
+    allow_insecure = link.get("allow_insecure", False)
     random_path = link.get("random_path", False)
     smux_enabled = link.get("smux_enabled", False)
-
-    fingerprint = link.get("fingerprint", "chrome")
-    alpn = link.get("alpn", "http/1.1")
+    fingerprint = link.get("fingerprint") or link.get("custom_fp") or "chrome"
     if not fingerprint or fingerprint.lower() == "none":
         fingerprint = None
+    alpn = link.get("alpn", "http/1.1")
     if not alpn:
         alpn = None
-
     port = link.get("port", 443)
 
+    dns_mode = link.get("xray_dns_mode", "doh")
+    doh_url = link.get("xray_doh_url") or DOH_UPSTREAMS[0] if DOH_UPSTREAMS else "https://cloudflare-dns.com/dns-query"
+    allowed_domains_str = link.get("xray_allowed_domains", "")
+    allowed_domains = [d.strip() for d in allowed_domains_str.split(",") if d.strip()]
+
+    proto = link.get("protocol", "vless-ws")
+    if proto == "vless-ws":
+        network_type = "ws"
+    elif proto.startswith("xhttp-"):
+        network_type = "xhttp"
+    else:
+        network_type = "ws"
+
+    outbounds = []
     for i, entry in enumerate(address_entries):
         addr = entry["address"]
         if naming_mode == "short":
@@ -4725,18 +4751,20 @@ async def singbox_subscription(uid: str, request: Request):
                 "server_name": link.get("custom_sni") or domain,
                 "insecure": allow_insecure,
             },
-            "transport": {
-                "type": "ws",
-                "path": path,
-                "headers": {"Host": link.get("custom_host") or domain}
-            }
+            "transport": {}
         }
 
+        if network_type == "ws":
+            proxy["transport"]["type"] = "ws"
+            proxy["transport"]["path"] = path
+            proxy["transport"]["headers"] = {"Host": link.get("custom_host") or domain}
+        elif network_type == "xhttp":
+            proxy["transport"]["type"] = "httpupgrade"
+            proxy["transport"]["path"] = path
+            proxy["transport"]["host"] = link.get("custom_host") or domain
+
         if fingerprint:
-            proxy["tls"]["utls"] = {
-                "enabled": True,
-                "fingerprint": fingerprint
-            }
+            proxy["tls"]["utls"] = {"enabled": True, "fingerprint": fingerprint}
         else:
             proxy["tls"]["utls"] = {"enabled": False}
 
@@ -4758,18 +4786,41 @@ async def singbox_subscription(uid: str, request: Request):
 
     proxy_tags = [o["tag"] for o in outbounds]
 
+    rules = [
+        {"clash_mode": "Direct", "outbound": "direct"},
+        {"protocol": "dns", "action": "hijack-dns"},
+        {"rule_set": "geosite-category-ads-all", "action": "reject"},
+        {"rule_set": "geosite-ir", "outbound": "direct"},
+        {"rule_set": "geoip-ir", "outbound": "direct"},
+        {"ip_is_private": True, "outbound": "direct"},
+    ]
+
+    if allowed_domains:
+        for d in allowed_domains:
+            if d.startswith("*."):
+                rules.append({"domain_suffix": d[2:], "outbound": "🚀 Select"})
+            else:
+                rules.append({"domain": d, "outbound": "🚀 Select"})
+    rules.append({"network": "tcp", "outbound": "🚀 Select"})
+    rules.append({"network": "udp", "outbound": "🚀 Select"})
+
+    dns_config = {
+        "servers": [
+            {"tag": "dns-remote", "address": doh_url, "detour": "🚀 Select"},
+            {"tag": "dns-direct", "address": "h3://dns.alidns.com/dns-query", "detour": "direct"}
+        ],
+        "rules": [
+            {"rule_set": "geosite-ir", "server": "dns-direct"},
+            {"rule_set": "geosite-category-ads-all", "action": "reject"}
+        ],
+        "final": "dns-remote"
+    }
+
+    if dns_mode == "fakedns":
+        dns_config["fakeip"] = {"enabled": True, "inet4_range": "198.18.0.0/15"}
+
     full_config = {
-        "dns": {
-            "servers": [
-                {"tag": "dns-remote", "address": "https://1.1.1.1/dns-query", "detour": "🚀 Select"},
-                {"tag": "dns-direct", "address": "h3://dns.alidns.com/dns-query", "detour": "direct"}
-            ],
-            "rules": [
-                {"rule_set": "geosite-ir", "server": "dns-direct"},
-                {"rule_set": "geosite-category-ads-all", "action": "reject"}
-            ],
-            "final": "dns-remote"
-        },
+        "dns": dns_config,
         "inbounds": [
             {
                 "type": "tun",
@@ -4806,15 +4857,7 @@ async def singbox_subscription(uid: str, request: Request):
             }
         ] + outbounds,
         "route": {
-            "rules": [
-                {"clash_mode": "Direct", "outbound": "direct"},
-                {"protocol": "dns", "action": "hijack-dns"},
-                {"rule_set": "geosite-category-ads-all", "action": "reject"},
-                {"rule_set": "geosite-ir", "outbound": "direct"},
-                {"rule_set": "geoip-ir", "outbound": "direct"},
-                {"ip_is_private": True, "outbound": "direct"},
-                {"network": "udp", "action": "reject"}
-            ],
+            "rules": rules,
             "rule_set": [
                 {
                     "type": "remote",
@@ -4849,7 +4892,6 @@ async def singbox_subscription(uid: str, request: Request):
             }
         }
     }
-
     return full_config
 
 
