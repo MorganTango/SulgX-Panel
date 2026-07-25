@@ -462,6 +462,9 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("links", "xray_allowed_domains", "TEXT DEFAULT ''")
             await ensure_column_pg("links", "reality_pbk", "TEXT DEFAULT ''")
             await ensure_column_pg("links", "reality_sid", "TEXT DEFAULT ''")
+            await ensure_column_pg("links", "bypass_iran", "BOOLEAN DEFAULT TRUE")
+            await ensure_column_pg("links", "bypass_china", "BOOLEAN DEFAULT FALSE")
+            await ensure_column_pg("links", "bypass_russia", "BOOLEAN DEFAULT FALSE")
             
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
@@ -637,6 +640,9 @@ else:
         await ensure_column_sqlite("links", "xray_allowed_domains", "TEXT DEFAULT ''")
         await ensure_column_sqlite("links", "reality_pbk", "TEXT DEFAULT ''")
         await ensure_column_sqlite("links", "reality_sid", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("links", "bypass_iran", "INTEGER DEFAULT 1")
+        await ensure_column_sqlite("links", "bypass_china", "INTEGER DEFAULT 0")
+        await ensure_column_sqlite("links", "bypass_russia", "INTEGER DEFAULT 0")
 
         await db_conn.commit()
 
@@ -765,13 +771,19 @@ async def load_initial_data():
             "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
             "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
             "fingerprint": "chrome", "alpn": "", "port": 443,
-            "proxy_line_id": None
+            "proxy_line_id": None,
+            "bypass_iran": 1,
+            "bypass_china": 0,
+            "bypass_russia": 0,
+            "xray_dns_mode": "doh",
+            "xray_doh_url": "",
+            "xray_allowed_domains": ""
         }
         async with LINKS_LOCK:
             LINKS[default_uuid] = default_link
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
             (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
              "", "", "", "chrome",
              "#39ff14", "", "", "", "default",
@@ -779,7 +791,8 @@ async def load_initial_data():
              "off", "100-200", "10-20",
              0, 0, 1,
              0, 0, "vless-ws",
-             "chrome", "", 443, None),
+             "chrome", "", 443, None,
+             1, 0, 0, "doh", "", ""),
         )
     total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
     stats["total_bytes"] = total_usage
@@ -809,7 +822,6 @@ async def load_initial_data():
     def_path_row = await db_fetchone("SELECT value FROM settings WHERE key='default_path'", "SELECT value FROM settings WHERE key='default_path'")
     if def_path_row and def_path_row["value"]:
         DEFAULT_PATH = def_path_row["value"]
-        # ---- XHTTP default path ----
     xhttp_path_row = await db_fetchone(
         "SELECT value FROM settings WHERE key='default_xhttp_path'",
         "SELECT value FROM settings WHERE key='default_xhttp_path'"
@@ -1352,7 +1364,10 @@ async def telegram_webhook(request: Request):
                         "allow_insecure": 0, "random_path": 0, "enable_ipv6": 1,
                         "smux_enabled": 0, "ip_limit": 0, "protocol": "vless-ws",
                         "fingerprint": "chrome", "alpn": "", "port": 443,
-                        "proxy_line_id": None
+                        "proxy_line_id": None,
+                        "bypass_iran": 1 if body.get("bypass_iran", True) else 0,
+                        "bypass_china": 1 if body.get("bypass_china", False) else 0,
+                        "bypass_russia": 1 if body.get("bypass_russia", False) else 0
                     }
                     async with LINKS_LOCK:
                         LINKS[uid] = link_data
@@ -2797,10 +2812,16 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
             alpn = link.get("alpn", "")
             port = int(link.get("port") or 443)
             proxy_line_id = link.get("proxy_line_id")
+            bypass_iran = 1 if link.get("bypass_iran", True) else 0
+            bypass_china = 1 if link.get("bypass_china", False) else 0
+            bypass_russia = 1 if link.get("bypass_russia", False) else 0
+            xray_dns_mode = link.get("xray_dns_mode", "doh")
+            xray_doh_url = link.get("xray_doh_url", "")
+            xray_allowed_domains = link.get("xray_allowed_domains", "")
             await db_execute(
-                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
-                (uid, label, limit_bytes, 0, max_conn, created_at, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id),
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
+                (uid, label, limit_bytes, 0, max_conn, created_at, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains),
             )
             async with LINKS_LOCK:
                 LINKS[uid] = {
@@ -2814,7 +2835,13 @@ async def restore_backup(request: Request, _=Depends(require_auth)):
                     "allow_insecure": allow_insecure, "random_path": random_path, "enable_ipv6": enable_ipv6,
                     "smux_enabled": smux_enabled, "ip_limit": ip_limit,
                     "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
-                    "proxy_line_id": proxy_line_id
+                    "proxy_line_id": proxy_line_id,
+                    "bypass_iran": bypass_iran,
+                    "bypass_china": bypass_china,
+                    "bypass_russia": bypass_russia,
+                    "xray_dns_mode": xray_dns_mode,
+                    "xray_doh_url": xray_doh_url,
+                    "xray_allowed_domains": xray_allowed_domains
                 }
     return {"ok": True}
 
@@ -2990,6 +3017,12 @@ async def create_link(request: Request, _=Depends(require_auth)):
     fingerprint = body.get("fingerprint", "chrome")
     alpn = body.get("alpn", "")
     port = int(body.get("port") or 443)
+    xray_dns_mode = body.get("xray_dns_mode", "doh")
+    xray_doh_url = body.get("xray_doh_url", "")
+    xray_allowed_domains = body.get("xray_allowed_domains", "")
+    bypass_iran = 1 if body.get("bypass_iran", True) else 0
+    bypass_china = 1 if body.get("bypass_china", False) else 0
+    bypass_russia = 1 if body.get("bypass_russia", False) else 0
 
     if flag:
         flag = flag.strip()[:2]
@@ -3014,14 +3047,20 @@ async def create_link(request: Request, _=Depends(require_auth)):
         "smux_enabled": smux_enabled, "ip_limit": ip_limit,
         "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
         "proxy_line_id": proxy_line_id,
+        "bypass_iran": bypass_iran,
+        "bypass_china": bypass_china,
+        "bypass_russia": bypass_russia,
+        "xray_dns_mode": xray_dns_mode,
+        "xray_doh_url": xray_doh_url,
+        "xray_allowed_domains": xray_allowed_domains
     }
     async with LINKS_LOCK:
         LINKS[uid] = link_data
-    await db_execute(
-        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
-        (uid, label, limit_bytes, 0, max_conn, now, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id),
-    )
+        await db_execute(
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,TRUE,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
+            (uid, label, limit_bytes, 0, max_conn, now, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains),
+        )
     extra = {"custom_path": custom_path, "custom_sni": custom_sni, "custom_host": custom_host, "custom_fp": custom_fp, "fragment": fragment,
              "tfo": tfo, "ech_enabled": ech_enabled, "ech_sni": ech_sni, "ech_doh": ech_doh,
              "fragment_mode": fragment_mode, "fragment_length": fragment_length, "fragment_interval": fragment_interval,
@@ -3111,7 +3150,13 @@ async def list_links(request: Request, _=Depends(require_auth)):
             "fingerprint": extra["fingerprint"],
             "alpn": extra["alpn"],
             "port": extra["port"],
-            "proxy_line_id": row.get("proxy_line_id")
+            "proxy_line_id": row.get("proxy_line_id"),
+            "bypass_iran": bool(row.get("bypass_iran", True)),
+            "bypass_china": bool(row.get("bypass_china", False)),
+            "bypass_russia": bool(row.get("bypass_russia", False)),
+            "xray_dns_mode": row.get("xray_dns_mode", "doh"),
+            "xray_doh_url": row.get("xray_doh_url", ""),
+            "xray_allowed_domains": row.get("xray_allowed_domains", "")
         })
     return {"links": result}
 
@@ -3170,6 +3215,12 @@ async def import_links(request: Request, _=Depends(require_auth)):
         fingerprint = item.get("fingerprint", "chrome")
         alpn = item.get("alpn", "")
         port = int(item.get("port") or 443)
+        bypass_iran = 1 if item.get("bypass_iran", True) else 0
+        bypass_china = 1 if item.get("bypass_china", False) else 0
+        bypass_russia = 1 if item.get("bypass_russia", False) else 0
+        xray_dns_mode = item.get("xray_dns_mode", "doh")
+        xray_doh_url = item.get("xray_doh_url", "")
+        xray_allowed_domains = item.get("xray_allowed_domains", "")
 
         if flag:
             flag = flag.strip()[:2]
@@ -3191,12 +3242,18 @@ async def import_links(request: Request, _=Depends(require_auth)):
                 "allow_insecure": allow_insecure, "random_path": random_path, "enable_ipv6": enable_ipv6,
                 "smux_enabled": smux_enabled, "ip_limit": ip_limit,
                 "protocol": protocol, "fingerprint": fingerprint, "alpn": alpn, "port": port,
-                "proxy_line_id": item.get("proxy_line_id")
+                "proxy_line_id": item.get("proxy_line_id"),
+                "bypass_iran": bypass_iran,
+                "bypass_china": bypass_china,
+                "bypass_russia": bypass_russia,
+                "xray_dns_mode": xray_dns_mode,
+                "xray_doh_url": xray_doh_url,
+                "xray_allowed_domains": xray_allowed_domains
             }
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33)",
-            (uid_input, label, limit_bytes, used_bytes, max_conn, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, item.get("proxy_line_id")),
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
+            (uid_input, label, limit_bytes, used_bytes, max_conn, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, item.get("proxy_line_id"), bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains),
         )
         imported += 1
     return {"ok": True, "imported": imported}
@@ -3307,7 +3364,10 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
         "proxy_line_id": ("proxy_line_id", lambda x: int(x) if x else None),
         "xray_dns_mode": ("xray_dns_mode", str),
         "xray_doh_url": ("xray_doh_url", str),
-        "xray_allowed_domains": ("xray_allowed_domains", str)
+        "xray_allowed_domains": ("xray_allowed_domains", str),
+        "bypass_iran": ("bypass_iran", lambda x: 1 if x else 0),
+        "bypass_china": ("bypass_china", lambda x: 1 if x else 0),
+        "bypass_russia": ("bypass_russia", lambda x: 1 if x else 0)
     }
 
     for key, mapping in field_map.items():
@@ -3409,9 +3469,9 @@ async def clone_link(uid: str, _=Depends(require_auth)):
         new_link["created_at"] = datetime.now(timezone.utc).isoformat()
         LINKS[new_uid] = new_link
         await db_execute(
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34)",
-            (new_uid, new_link["label"], new_link["limit_bytes"], 0, new_link["max_connections"], new_link["created_at"], 1, new_link.get("expires_at"), new_link.get("custom_path", ""), new_link.get("custom_sni", ""), new_link.get("custom_host", ""), new_link.get("custom_fp", "chrome"), new_link.get("color", "#39ff14"), new_link.get("flag", ""), new_link.get("fragment", ""), new_link.get("ip_profile_id", ""), new_link.get("naming_mode", "default"), new_link.get("tfo", 0), new_link.get("ech_enabled", 0), new_link.get("ech_sni", ""), new_link.get("ech_doh", ""), new_link.get("fragment_mode", "off"), new_link.get("fragment_length", "100-200"), new_link.get("fragment_interval", "10-20"), new_link.get("allow_insecure", 0), new_link.get("random_path", 0), new_link.get("enable_ipv6", 1), new_link.get("smux_enabled", 0), new_link.get("ip_limit", 0), new_link.get("protocol", "vless-ws"), new_link.get("fingerprint", "chrome"), new_link.get("alpn", ""), new_link.get("port", 443), new_link.get("proxy_line_id")),
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
+            (new_uid, new_link["label"], new_link["limit_bytes"], 0, new_link["max_connections"], new_link["created_at"], 1, new_link.get("expires_at"), new_link.get("custom_path", ""), new_link.get("custom_sni", ""), new_link.get("custom_host", ""), new_link.get("custom_fp", "chrome"), new_link.get("color", "#39ff14"), new_link.get("flag", ""), new_link.get("fragment", ""), new_link.get("ip_profile_id", ""), new_link.get("naming_mode", "default"), new_link.get("tfo", 0), new_link.get("ech_enabled", 0), new_link.get("ech_sni", ""), new_link.get("ech_doh", ""), new_link.get("fragment_mode", "off"), new_link.get("fragment_length", "100-200"), new_link.get("fragment_interval", "10-20"), new_link.get("allow_insecure", 0), new_link.get("random_path", 0), new_link.get("enable_ipv6", 1), new_link.get("smux_enabled", 0), new_link.get("ip_limit", 0), new_link.get("protocol", "vless-ws"), new_link.get("fingerprint", "chrome"), new_link.get("alpn", ""), new_link.get("port", 443), new_link.get("proxy_line_id"), new_link.get("bypass_iran", 1), new_link.get("bypass_china", 0), new_link.get("bypass_russia", 0), new_link.get("xray_dns_mode", "doh"), new_link.get("xray_doh_url", ""), new_link.get("xray_allowed_domains", "")),
         )
         log_event("Inbound", f"Cloned inbound {uid} -> {new_uid}")
         return {"new_uuid": new_uid, "label": new_link["label"]}
@@ -4592,15 +4652,26 @@ async def clash_subscription(uid: str, request: Request):
     ]
 
     rules = []
+    if bypass_iran:
+        rules.append("DOMAIN-SUFFIX,ir,DIRECT")
+        rules.append("GEOIP,IR,DIRECT")
+    if bypass_china:
+        rules.append("DOMAIN-SUFFIX,cn,DIRECT")
+        rules.append("GEOIP,CN,DIRECT")
+    if bypass_russia:
+        rules.append("DOMAIN-SUFFIX,ru,DIRECT")
+        rules.append("GEOIP,RU,DIRECT")
+
     if allowed_domains:
         for d in allowed_domains:
             if d.startswith("*."):
                 rules.append(f"DOMAIN-SUFFIX,{d[2:]},🚀 Select")
             else:
                 rules.append(f"DOMAIN,{d},🚀 Select")
-    rules.append("DOMAIN-SUFFIX,ir,DIRECT")
-    rules.append("GEOIP,IR,DIRECT")
     rules.append("MATCH,🚀 Select")
+    bypass_iran = bool(link.get("bypass_iran", True))
+    bypass_china = bool(link.get("bypass_china", False))
+    bypass_russia = bool(link.get("bypass_russia", False))
 
     dns_config = {
         "enable": True,
@@ -4790,10 +4861,19 @@ async def singbox_subscription(uid: str, request: Request):
         {"clash_mode": "Direct", "outbound": "direct"},
         {"protocol": "dns", "action": "hijack-dns"},
         {"rule_set": "geosite-category-ads-all", "action": "reject"},
-        {"rule_set": "geosite-ir", "outbound": "direct"},
-        {"rule_set": "geoip-ir", "outbound": "direct"},
-        {"ip_is_private": True, "outbound": "direct"},
     ]
+
+    if bypass_iran:
+        rules.append({"rule_set": "geosite-ir", "outbound": "direct"})
+        rules.append({"rule_set": "geoip-ir", "outbound": "direct"})
+    if bypass_china:
+        rules.append({"domain": ["geosite:cn"], "outbound": "direct"})
+        rules.append({"ip": ["geoip:cn"], "outbound": "direct"})
+    if bypass_russia:
+        rules.append({"domain": ["geosite:ru"], "outbound": "direct"})
+        rules.append({"ip": ["geoip:ru"], "outbound": "direct"})
+
+    rules.append({"ip_is_private": True, "outbound": "direct"})
 
     if allowed_domains:
         for d in allowed_domains:
@@ -4803,7 +4883,9 @@ async def singbox_subscription(uid: str, request: Request):
                 rules.append({"domain": d, "outbound": "🚀 Select"})
     rules.append({"network": "tcp", "outbound": "🚀 Select"})
     rules.append({"network": "udp", "outbound": "🚀 Select"})
-
+    bypass_iran = bool(link.get("bypass_iran", True))
+    bypass_china = bool(link.get("bypass_china", False))
+    bypass_russia = bool(link.get("bypass_russia", False))
     dns_config = {
         "servers": [
             {"tag": "dns-remote", "address": doh_url, "detour": "🚀 Select"},
@@ -8040,6 +8122,9 @@ example.com
         </select></div>
         <div class="fg"><label class="fl">DoH URL (if DoH selected)</label><input class="fi" id="xray-doh-url-create" placeholder="https://cloudflare-dns.com/dns-query"></div>
         <div class="fg"><label class="fl">Allowed Domains (one per line)</label><textarea class="fi" id="xray-allowed-domains-create" rows="3" placeholder="example.com"></textarea></div>
+        <div class="fg"><label class="fl">Bypass Iran (Direct)</label><div class="toggle on" id="bypass-iran-create" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fg"><label class="fl">Bypass China (Direct)</label><div class="toggle" id="bypass-china-create" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fg"><label class="fl">Bypass Russia (Direct)</label><div class="toggle" id="bypass-russia-create" onclick="this.classList.toggle('on')"></div></div>
       </div>
     </div>
     <div class="fg"><label class="fl" data-en="Traffic Limit (GB)" data-fa="محدودیت ترافیک (گیگابایت)">Traffic Limit (GB)</label><input class="fi" type="number" id="nv" min="0" step="0.1" value="0" placeholder="0 = Unlimited"></div>
@@ -8171,6 +8256,9 @@ example.com
         </select></div>
         <div class="fg"><label class="fl">DoH URL (if DoH selected)</label><input class="fi" id="xray-doh-url" placeholder="https://cloudflare-dns.com/dns-query"></div>
         <div class="fg"><label class="fl">Allowed Domains (one per line)</label><textarea class="fi" id="xray-allowed-domains" rows="3" placeholder="example.com"></textarea></div>
+        <div class="fg"><label class="fl">Bypass Iran (Direct)</label><div class="toggle on" id="bypass-iran-edit" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fg"><label class="fl">Bypass China (Direct)</label><div class="toggle" id="bypass-china-edit" onclick="this.classList.toggle('on')"></div></div>
+        <div class="fg"><label class="fl">Bypass Russia (Direct)</label><div class="toggle" id="bypass-russia-edit" onclick="this.classList.toggle('on')"></div></div>
       </div>
     </div>
     <div class="fg"><label class="fl" data-en="Traffic Limit (GB)" data-fa="محدودیت ترافیک (گیگابایت)">Traffic Limit (GB)</label><input class="fi" type="number" id="el" min="0" step="0.1" placeholder="0 = Unlimited"></div>
@@ -9099,6 +9187,9 @@ async function createLink(){
   const xrayDnsMode=$m('xray-dns-mode-create').value;
   const xrayDohUrl=$m('xray-doh-url-create').value.trim();
   const xrayAllowedDomains=$m('xray-allowed-domains-create').value.split('\n').map(l=>l.trim()).filter(l=>l).join(',');
+  const bypassIran = $m('bypass-iran-create').classList.contains('on');
+  const bypassChina = $m('bypass-china-create').classList.contains('on');
+  const bypassRussia = $m('bypass-russia-create').classList.contains('on');
   const body={
     label,uuid,limit_value:v,limit_unit:'GB',max_connections:mc,days_valid:days,
     custom_path:$m('ap').value.trim(),custom_sni:$m('asni').value.trim(),
@@ -9114,7 +9205,10 @@ async function createLink(){
     proxy_line_id: parseInt($m('proxy-line-select-create').value) || null,
     xray_dns_mode: xrayDnsMode,
     xray_doh_url: xrayDohUrl,
-    xray_allowed_domains: xrayAllowedDomains
+    xray_allowed_domains: xrayAllowedDomains,
+    bypass_iran: bypassIran,
+    bypass_china: bypassChina,
+    bypass_russia: bypassRussia
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
@@ -9216,6 +9310,12 @@ async function showEditMo(uid) {
   $m('xray-dns-mode').value = l.xray_dns_mode || 'doh';
   $m('xray-doh-url').value = l.xray_doh_url || '';
   $m('xray-allowed-domains').value = (l.xray_allowed_domains || '').replace(/,/g, '\n');
+  if (l.bypass_iran) $m('bypass-iran-edit').classList.add('on');
+    else $m('bypass-iran-edit').classList.remove('on');
+    if (l.bypass_china) $m('bypass-china-edit').classList.add('on');
+    else $m('bypass-china-edit').classList.remove('on');
+    if (l.bypass_russia) $m('bypass-russia-edit').classList.add('on');
+    else $m('bypass-russia-edit').classList.remove('on');
 
   const fragMode = l.fragment_mode || 'off';
   $m('efrag-mode').value = fragMode;
@@ -9276,6 +9376,9 @@ async function saveEdit() {
   const xrayDnsMode = $m('xray-dns-mode').value;
   const xrayDohUrl = $m('xray-doh-url').value.trim();
   const xrayAllowedDomains = $m('xray-allowed-domains').value.split('\n').map(l => l.trim()).filter(l => l).join(',');
+  const bypassIran = $m('bypass-iran-edit').classList.contains('on');
+  const bypassChina = $m('bypass-china-edit').classList.contains('on');
+  const bypassRussia = $m('bypass-russia-edit').classList.contains('on');
 
   const body = {
     limit_value: v,
@@ -9309,7 +9412,10 @@ async function saveEdit() {
     proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null,
     xray_dns_mode: xrayDnsMode,
     xray_doh_url: xrayDohUrl,
-    xray_allowed_domains: xrayAllowedDomains
+    xray_allowed_domains: xrayAllowedDomains,
+    bypass_iran: bypassIran,
+    bypass_china: bypassChina,
+    bypass_russia: bypassRussia
   };
   if (days) body.days_valid = days;
 
@@ -11004,11 +11110,6 @@ async function refreshProxyFlagsAndOptions(context) {
     if (btn) btn.disabled = false;
 }
 
-function copyXrayConfig(uid) {
-    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
-    copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/xray-config');
-}
-
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         document.querySelectorAll('.mo.show').forEach(m => m.classList.remove('show'));
@@ -11311,16 +11412,43 @@ def build_xray_config(link: dict, proxy_line: dict, request: Request) -> dict:
         ],
         "routing": {
             "domainStrategy": "IPIfNonMatch",
-            "rules": [
-                {"domain": ["geosite:private"], "outboundTag": "direct", "type": "field"},
-                {"ip": ["geoip:private"], "outboundTag": "direct", "type": "field"},
-                {"network": "tcp", "outboundTag": "proxy", "type": "field"},
-                {"network": "udp", "outboundTag": "proxy", "type": "field"}
-            ]
+            "rules": []
         }
     }
 
     dns_mode = link.get("xray_dns_mode", "doh")
+    allowed_domains_str = link.get("xray_allowed_domains", "")
+    allowed_domains = [d.strip() for d in allowed_domains_str.split(",") if d.strip()]
+
+    bypass_iran = bool(link.get("bypass_iran", True))
+    bypass_china = bool(link.get("bypass_china", False))
+    bypass_russia = bool(link.get("bypass_russia", False))
+
+    rules = []
+    if allowed_domains:
+        for d in allowed_domains:
+            if d.startswith("*."):
+                rules.append({"domain": [f"domain:{d[2:]}"], "outboundTag": "proxy", "type": "field"})
+            else:
+                rules.append({"domain": [f"full:{d}"], "outboundTag": "proxy", "type": "field"})
+
+    rules.append({"domain": ["geosite:private"], "outboundTag": "direct", "type": "field"})
+    rules.append({"ip": ["geoip:private"], "outboundTag": "direct", "type": "field"})
+
+    if bypass_iran:
+        rules.append({"domain": ["geosite:ir"], "outboundTag": "direct", "type": "field"})
+        rules.append({"ip": ["geoip:ir"], "outboundTag": "direct", "type": "field"})
+    if bypass_china:
+        rules.append({"domain": ["geosite:cn"], "outboundTag": "direct", "type": "field"})
+        rules.append({"ip": ["geoip:cn"], "outboundTag": "direct", "type": "field"})
+    if bypass_russia:
+        rules.append({"domain": ["geosite:ru"], "outboundTag": "direct", "type": "field"})
+        rules.append({"ip": ["geoip:ru"], "outboundTag": "direct", "type": "field"})
+
+    rules.append({"network": "tcp", "outboundTag": "proxy", "type": "field"})
+    rules.append({"network": "udp", "outboundTag": "proxy", "type": "field"})
+    config["routing"]["rules"] = rules
+
     if dns_mode == "doh":
         doh_url = link.get("xray_doh_url") or DOH_UPSTREAMS[0] if DOH_UPSTREAMS else "https://cloudflare-dns.com/dns-query"
         config["dns"] = {
@@ -11336,10 +11464,32 @@ def build_xray_config(link: dict, proxy_line: dict, request: Request) -> dict:
             "tag": "dns-in"
         })
         config["outbounds"].insert(1, {"protocol": "dns", "settings": {"nonIPQuery": "reject"}, "tag": "dns-out"})
-        rules = config["routing"]["rules"]
-        rules.insert(0, {"inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field"})
-        rules.insert(1, {"inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field"})
-        rules.insert(2, {"inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field"})
+        dns_rules = [
+            {"inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field"},
+            {"inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field"},
+            {"inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field"}
+        ]
+        for rule in reversed(dns_rules):
+            config["routing"]["rules"].insert(0, rule)
+
+    elif dns_mode == "fakedns":
+        config["fakedns"] = [{"ipPool": "198.18.0.0/15", "poolSize": 65535}]
+        config["dns"] = {
+            "servers": [
+                {
+                    "address": "fakedns",
+                    "domains": allowed_domains if allowed_domains else ["domain:example.com"]
+                },
+                {
+                    "address": link.get("xray_doh_url") or "https://cloudflare-dns.com/dns-query",
+                    "tag": "remote-dns"
+                }
+            ],
+            "queryStrategy": "UseIP",
+            "tag": "dns"
+        }
+        config["inbounds"][0]["sniffing"]["routeOnly"] = False
+        config["inbounds"][0]["sniffing"]["destOverride"] = ["fakedns", "tls", "http", "quic"]
 
     if proxy_line and proxy_line.get("is_active"):
         proxy_out = {
