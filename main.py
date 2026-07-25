@@ -4338,7 +4338,7 @@ if (dailyData.length > 0) {{
 </body>
 </html>"""
     return HTMLResponse(content=html_content)
-    
+
 @app.get("/user/{uid}/sub")
 @limiter.limit("10/minute")
 async def user_subscription(uid: str, request: Request):
@@ -9257,7 +9257,7 @@ async function saveEdit() {
     proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null
     xray_dns_mode: xrayDnsMode,
     xray_doh_url: xrayDohUrl,
-    xray_allowed_domains: xrayAllowedDomains,
+    xray_allowed_domains: xrayAllowedDomains
   };
   if (days) body.days_valid = days;
 
