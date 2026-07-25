@@ -9054,6 +9054,9 @@ async function createLink(){
     const length=$m('afrag-length').value.trim()||'100-200';
     fragment=length;
   }
+  const xrayDnsMode=$m('xray-dns-mode-create').value;
+  const xrayDohUrl=$m('xray-doh-url-create').value.trim();
+  const xrayAllowedDomains=$m('xray-allowed-domains-create').value.split('\n').map(l=>l.trim()).filter(l=>l).join(',');
   const body={
     label,uuid,limit_value:v,limit_unit:'GB',max_connections:mc,days_valid:days,
     custom_path:$m('ap').value.trim(),custom_sni:$m('asni').value.trim(),
@@ -9066,7 +9069,10 @@ async function createLink(){
     allow_insecure:allowInsecure,random_path:randomPath,
     smux_enabled:smuxEnabled,ip_limit:ipLimit,
     protocol:protocol,fingerprint:fingerprint,alpn:alpn,port:port,
-    proxy_line_id: parseInt($m('proxy-line-select-create').value) || null
+    proxy_line_id: parseInt($m('proxy-line-select-create').value) || null,
+    xray_dns_mode: xrayDnsMode,
+    xray_doh_url: xrayDohUrl,
+    xray_allowed_domains: xrayAllowedDomains
   };
   try{await authenticatedFetch('/api/links',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});toast('Created');$m('mo-add').classList.remove('show');loadLinks();loadStats();}catch{toast('Error',true);}
 }
