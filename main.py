@@ -6224,7 +6224,6 @@ body.blue-mode {{
   --halo-color-3: rgba(59, 130, 246, 0.05);
 }}
 
-/* ---- icon system (mask-image) base ---- */
 .nav-link .nav-icon,
 .btn-icon .icon,
 .stat-card .stat-icon,
@@ -6247,7 +6246,6 @@ body.blue-mode {{
   vertical-align: middle;
 }}
 
-/* ---- Specific icon masks ---- */
 .icon-dashboard {{ mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z'/%3E%3Cpolyline points='9 22 9 12 15 12 15 22'/%3E%3C/svg%3E"); }}
 .icon-inbounds {{ mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cline x1='12' y1='8' x2='12' y2='16'/%3E%3C/svg%3E"); }}
 .icon-cleanip {{ mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/%3E%3C/svg%3E"); }}
@@ -6275,7 +6273,6 @@ body.blue-mode {{
 .icon-github {{ mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z'/%3E%3C/svg%3E"); }}
 .icon-telegram-link {{ mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z'/%3E%3C/svg%3E"); }}
 
-/* ── base layout ── */
 html, body {{
   height: 100%;
   overflow-x: hidden;
@@ -6391,7 +6388,6 @@ a {{ text-decoration: none; color: inherit; }}
   color: #000;
 }}
 
-/* ── header ── */
 .header {{
   min-height: var(--header-h);
   background: var(--surface);
@@ -6442,10 +6438,10 @@ a {{ text-decoration: none; color: inherit; }}
 }}
 .header-nav {{ display: flex; align-items: center; gap: 8px; }}
 .nav-link {{
-  display: flex;                 /* vertical stacking */
-  flex-direction: column;        /* icon on top, text below */
-  align-items: center;           /* center horizontally */
-  gap: 4px;                     /* space between icon and text */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   padding: 10px 20px;
   border-radius: var(--radius-sm);
   color: var(--text3);
@@ -6543,7 +6539,6 @@ a {{ text-decoration: none; color: inherit; }}
   border-radius: var(--radius-sm);
 }}
 
-/* ── main content ── */
 .main {{
   flex: 1;
   min-height: calc(100vh - var(--header-h) - var(--footer-h));
@@ -6575,7 +6570,6 @@ a {{ text-decoration: none; color: inherit; }}
 .page-title[data-fa] {{ font-family: 'Vazirmatn'; }}
 .page-sub {{ font-size: 1rem; color: var(--text3); margin-top: 6px; }}
 
-/* ── stats row ── */
 .stats-row {{
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -6632,7 +6626,6 @@ a {{ text-decoration: none; color: inherit; }}
   .stat-val {{ font-size: 1.4rem; }}
 }}
 
-/* ── speed card ── */
 .speed-card {{
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -6650,7 +6643,6 @@ a {{ text-decoration: none; color: inherit; }}
 .speed-item .stat-label {{ margin-bottom: 0; font-size: 0.8rem; }}
 .speed-item .stat-val {{ font-size: 1.4rem; }}
 
-/* ── card ── */
 .card {{
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -6668,7 +6660,6 @@ a {{ text-decoration: none; color: inherit; }}
 .card-title {{ font-size: 1.15rem; font-weight: 600; color: var(--text); }}
 .chart-container {{ height: 280px; width: 100%; }}
 
-/* ── buttons ── */
 .btn {{
   font-family: inherit;
   font-size: 0.88rem;
@@ -6733,7 +6724,6 @@ a {{ text-decoration: none; color: inherit; }}
 }}
 .btn-sm {{ padding: 8px 18px; font-size: 0.78rem; }}
 
-/* ── tables ── */
 .tbl-wrap {{ overflow-x: auto; border-radius: var(--radius-sm); }}
 .tbl {{
   width: 100%;
@@ -6768,16 +6758,10 @@ a {{ text-decoration: none; color: inherit; }}
   vertical-align: middle;
   text-align: center;
 }}
-.tbl tbody tr:hover td {{
-  background: var(--primary-glass);
-}}
-.tbl tbody tr:nth-child(even) td {{
-  background: rgba(255,255,255,0.02);
-}}
+.tbl tbody tr:hover td {{ background: var(--primary-glass); }}
+.tbl tbody tr:nth-child(even) td {{ background: rgba(255,255,255,0.02); }}
 
-#inbound-table th, #inbound-table td {{
-  text-align: center !important;
-}}
+#inbound-table th, #inbound-table td {{ text-align: center !important; }}
 #inbound-table td:first-child, #inbound-table th:first-child {{ width: 50px; }}
 #inbound-table th:nth-child(8), #inbound-table td:nth-child(8) {{ min-width: 180px; }}
 .tbl input[type="checkbox"] {{ width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer; }}
@@ -6788,7 +6772,6 @@ a {{ text-decoration: none; color: inherit; }}
   width: 100%;
   border-collapse: collapse;
 }}
-
 #login-logs-table th,
 #login-logs-table td {{
   text-align: center;
@@ -6796,10 +6779,8 @@ a {{ text-decoration: none; color: inherit; }}
   word-break: break-word;
   overflow-wrap: break-word;
 }}
-
 #login-logs-table th:first-child,
 #login-logs-table td:first-child {{ width: 15%; }}
-
 #login-logs-table th:nth-child(2),
 #login-logs-table td:nth-child(2) {{
   width: 30%;
@@ -6807,13 +6788,10 @@ a {{ text-decoration: none; color: inherit; }}
   padding-left: 12px;
   padding-right: 8px;
 }}
-
 #login-logs-table th:nth-child(3),
 #login-logs-table td:nth-child(3) {{ width: 15%; }}
-
 #login-logs-table th:nth-child(4),
 #login-logs-table td:nth-child(4) {{ width: 20%; }}
-
 #login-logs-table th:nth-child(5),
 #login-logs-table td:nth-child(5) {{ width: 20%; }}
 
@@ -6824,10 +6802,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
   padding-right: 12px;
 }}
 
-#logs-table th, #logs-tbody td {{
-  text-align: center !important;
-  vertical-align: middle !important;
-}}
+#logs-table th, #logs-tbody td {{ text-align: center !important; vertical-align: middle !important; }}
 
 .tbl.scanner-tbl th:first-child,
 .tbl.scanner-tbl td:first-child {{
@@ -6835,7 +6810,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
   text-align: left;
 }}
 
-/* ── tags & pills ── */
 .tag {{
   display: inline-flex;
   align-items: center;
@@ -6855,7 +6829,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 .pill-fill {{ height: 100%; border-radius: 5px; transition: width 0.5s ease; }}
 .pill-lim {{ color: var(--text3); font-size: 0.78rem; }}
 
-/* ── toggles ── */
 .toggle {{
   width: 52px;
   height: 30px;
@@ -6888,11 +6861,9 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
   background: #fff;
 }}
 
-/* ── system bar ── */
 .sys-bar {{ height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; }}
 .sys-fill {{ height: 100%; border-radius: 6px; transition: width 0.8s ease; }}
 
-/* ── status list ── */
 .sl-item {{
   display: flex;
   align-items: center;
@@ -6903,7 +6874,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 .sl-k {{ color: var(--text3); font-size: 0.98rem; }}
 .sl-v {{ color: var(--text); font-weight: 600; font-size: 0.98rem; }}
 
-/* ── form groups ── */
 .fg {{ display: flex; flex-direction: column; gap: 10px; margin-bottom: 26px; }}
 .fl {{
   font-size: 0.78rem;
@@ -6930,7 +6900,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
   box-shadow: 0 0 0 5px var(--primary-dim);
 }}
 
-/* ── action buttons ── */
 .act-btn {{
   font-family: inherit;
   font-size: 0.72rem;
@@ -6953,7 +6922,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 .act-edit {{ color: var(--yellow); border-color: rgba(251,191,36,0.4); }} .act-edit:hover {{ background: rgba(251,191,36,0.2); }}
 .act-del {{ color: var(--red); border-color: rgba(248,113,113,0.4); }} .act-del:hover {{ background: rgba(248,113,113,0.25); }}
 
-/* ── toast ── */
 .toast {{
   position: fixed;
   bottom: 40px;
@@ -6977,7 +6945,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 }}
 .toast.show {{ opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }}
 
-/* ── modals ── */
 .mo {{
   position: fixed;
   inset: 0;
@@ -7028,7 +6995,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 .qr-box {{ text-align: center; padding: 30px; background: var(--surface3); border-radius: var(--radius-md); border: 1px solid var(--border); margin-top: 18px; }}
 .qr-box img {{ max-width: 230px; border-radius: 18px; border: 3px solid var(--border); box-shadow: var(--shadow); }}
 
-/* ── footer ── */
 .footer {{
   height: var(--footer-h);
   display: flex;
@@ -7046,7 +7012,6 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {{
 .footer-inner a:hover {{ text-shadow: 0 0 18px var(--primary); }}
 textarea.fi {{ resize: vertical; min-height: 130px; }}
 
-/* ── chips & pill buttons ── */
 .chip {{
   padding: 9px 20px;
   border-radius: 14px;
@@ -7080,7 +7045,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 .pill-btn.active {{ background: var(--primary-glass); color: var(--primary); border-color: var(--primary); box-shadow: 0 0 28px var(--primary-dim); }}
 .pill-btn:active {{ transform: scale(0.97); }}
 
-/* ── advanced section ── */
 .adv-toggle {{
   cursor: pointer;
   color: var(--primary);
@@ -7105,7 +7069,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   margin-top: 14px;
 }}
 
-/* ── scrollable areas ── */
 .addr-list-scroll {{
   max-height: 420px;
   overflow-y: auto;
@@ -7118,7 +7081,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 .logs-table-container {{ max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }}
 .scan-results-container {{ max-height: 350px; overflow-y: auto; -webkit-overflow-scrolling: touch; }}
 
-/* ── mobile nav ── */
 .mobile-nav {{
   display: none;
   position: fixed;
@@ -7147,7 +7109,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 }}
 .mobile-nav .nav-item.active {{ color: var(--primary); background: var(--primary-glass); }}
 
-/* ── glass button group ── */
 .glass-btn-group {{
   display: flex;
   flex-wrap: wrap;
@@ -7176,7 +7137,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 .glass-btn:hover:not(.active) {{ background: rgba(255,255,255,0.06); color: var(--text); }}
 .glass-btn:active {{ transform: scale(0.97); }}
 
-/* ── status cards ── */
 .status-cards-grid {{
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -7223,7 +7183,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   box-shadow: 0 0 24px rgba(168,85,247,0.3);
 }}
 
-/* ── tooltips ── */
 .tooltip-container {{ position: relative; display: inline-flex; }}
 .tooltip-text {{
   visibility: hidden;
@@ -7248,7 +7207,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 }}
 .tooltip-container:hover .tooltip-text {{ visibility: visible; opacity: 1; transform: translateX(-50%) translateY(-8px); }}
 
-/* ── multi panel grid ── */
 .multi-panel-grid {{ display: flex; flex-wrap: wrap; gap: 20px; }}
 .multi-panel-grid .status-glass-card {{
   max-width: 400px;
@@ -7260,7 +7218,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 }}
 .multi-panel-grid .status-glass-card > div:first-child {{ width: 100%; display: flex; flex-direction: column; gap: 16px; }}
 
-/* ── scanner location filter ── */
 .scanner-location-filter {{ margin: 18px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }}
 .scanner-location-filter input {{
   flex: 1;
@@ -7273,7 +7230,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
 .location-checkbox {{ display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--text2); cursor: pointer; }}
 .location-checkbox input[type="checkbox"] {{ width: 19px; height: 19px; cursor: pointer; }}
 
-/* ── Responsive (large screens) ── */
 @media (min-width: 1024px) {{
   .header-inner {{ flex-wrap: nowrap; }}
   .main {{ padding: 40px 56px; }}
@@ -7283,7 +7239,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   .btn {{ width: auto; }}
 }}
 
-/* ── Responsive (tablets / small laptops) ── */
 @media (max-width: 1023px) {{
   .header {{
     min-height: auto;
@@ -7338,10 +7293,8 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   }}
 
   .status-glass-card {{ max-width: 100%; padding: 18px; font-size: 0.82rem; }}
-
   .status-cards-grid {{ grid-template-columns: repeat(2, 1fr) !important; }}
 
-  /* ── Mobile table cards ── */
   #inbound-table thead {{ display: none; }}
   #inbound-table tr {{ display: block; margin-bottom: 20px; border: 1px solid var(--border2); border-radius: var(--radius-md); padding: 20px; background: var(--surface); box-shadow: var(--shadow); }}
   #inbound-table td {{ display: flex; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }}
@@ -7355,7 +7308,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   #addresses-card > div:nth-child(2) {{ flex-wrap: wrap; gap: 12px; }}
   #addresses-card > div:nth-child(2) .btn {{ flex: 1 1 auto; margin-bottom: 4px; }}
 
-  /* ── Recent Activity horizontal scroll ── */
   #login-logs-table {{
     display: block;
     overflow-x: auto;
@@ -7383,7 +7335,6 @@ textarea.fi {{ resize: vertical; min-height: 130px; }}
   #doh-ping-table table {{ min-width: 650px; }}
 }}
 
-/* ── Responsive (small phones) ── */
 @media (max-width: 500px) {{
   .stats-row {{ grid-template-columns: repeat(2, 1fr); }}
   .glass-btn-group {{ flex-direction: column; }}
