@@ -457,6 +457,9 @@ if CONFIG["database_url"] and HAS_POSTGRES:
             await ensure_column_pg("proxy_lines", "flag", "TEXT DEFAULT ''")
             await ensure_column_pg("proxy_lines", "last_test_status", "TEXT DEFAULT ''")
             await ensure_column_pg("proxy_lines", "last_latency_ms", "INTEGER DEFAULT 0")
+            await ensure_column_pg("links", "xray_dns_mode", "TEXT DEFAULT 'doh'")
+            await ensure_column_pg("links", "xray_doh_url", "TEXT DEFAULT ''")
+            await ensure_column_pg("links", "xray_allowed_domains", "TEXT DEFAULT ''")
             
 
     async def db_execute(sqlite_q: str, pg_q: str, params: tuple = ()):
@@ -627,6 +630,9 @@ else:
         await ensure_column_sqlite("proxy_lines", "flag", "TEXT DEFAULT ''")
         await ensure_column_sqlite("proxy_lines", "last_test_status", "TEXT DEFAULT ''")
         await ensure_column_sqlite("proxy_lines", "last_latency_ms", "INTEGER DEFAULT 0")
+        await ensure_column_sqlite("links", "xray_dns_mode", "TEXT DEFAULT 'doh'")
+        await ensure_column_sqlite("links", "xray_doh_url", "TEXT DEFAULT ''")
+        await ensure_column_sqlite("links", "xray_allowed_domains", "TEXT DEFAULT ''")
 
         await db_conn.commit()
 
@@ -3295,6 +3301,9 @@ async def toggle_link(uid: str, request: Request, _=Depends(require_auth)):
         "alpn": ("alpn", str),
         "port": ("port", int),
         "proxy_line_id": ("proxy_line_id", lambda x: int(x) if x else None),
+        "xray_dns_mode": ("xray_dns_mode", str),
+        "xray_doh_url": ("xray_doh_url", str),
+        "xray_allowed_domains": ("xray_allowed_domains", str)
     }
 
     for key, mapping in field_map.items():
@@ -4046,7 +4055,7 @@ async def user_dashboard(uid: str, request: Request):
     clash_url_esc = html.escape(clash_url)
     singbox_url_esc = html.escape(singbox_url)
     qr_url_esc = html.escape(qr_url)
-    html_content = f"""<!DOCTYPE html>
+html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4206,14 +4215,15 @@ h1{{color:var(--primary); font-size:1.8rem; font-weight:800; letter-spacing:-0.5
     <button class="btn btn-outline" onclick="copyToClip('{clash_url_esc}', t('clash_copied'))">🐱 <span data-en="Copy Clash" data-fa="کپی کلش">Copy Clash</span></button>
     <button class="btn btn-outline" onclick="copyToClip('{singbox_url_esc}', t('singbox_copied'))">🧩 <span data-en="Copy Sing‑Box" data-fa="کپی سینگ‌باکس">Copy Sing‑Box</span></button>
     <button class="btn btn-outline" onclick="copyToClip('{vless_link_esc}', t('vless_copied'))">📋 <span data-en="Copy VLESS" data-fa="کپی وی‌لس">Copy VLESS</span></button>
+    <button class="btn btn-outline" onclick="copyXrayConfig('{uid}')">⚙️ <span data-en="Xray Config" data-fa="کانفیگ Xray">Xray Config</span></button>
   </div>
 </div>
 <div id="toast">Copied!</div>
 <script>
 var lang = localStorage.getItem('ll') || 'en';
 var i18n = {{
-  en:{{ sub_copied:'Subscription Link Copied!', clash_copied:'Clash Link Copied!', singbox_copied:'Sing‑Box Link Copied!', vless_copied:'VLESS Link Copied!' }},
-  fa:{{ sub_copied:'لینک اشتراک کپی شد!', clash_copied:'لینک کلش کپی شد!', singbox_copied:'لینک سینگ‌باکس کپی شد!', vless_copied:'لینک VLESS کپی شد!' }}
+  en:{{ sub_copied:'Subscription Link Copied!', clash_copied:'Clash Link Copied!', singbox_copied:'Sing‑Box Link Copied!', vless_copied:'VLESS Link Copied!', xray_copied:'Xray Config Link Copied!' }},
+  fa:{{ sub_copied:'لینک اشتراک کپی شد!', clash_copied:'لینک کلش کپی شد!', singbox_copied:'لینک سینگ‌باکس کپی شد!', vless_copied:'لینک VLESS کپی شد!', xray_copied:'لینک کانفیگ Xray کپی شد!' }}
 }};
 function t(key){{ return (i18n[lang] && i18n[lang][key]) || i18n['en'][key] || key; }}
 function setLang(l){{
@@ -4291,6 +4301,11 @@ function fallbackCopyDashboard(text, msg) {{
         setTimeout(function() {{ t.classList.remove('show'); }}, 2500);
     }}
     document.body.removeChild(textArea);
+}}
+
+function copyXrayConfig(uid) {{
+    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
+    copyToClip('https://' + location.host + prefix + '/sub/' + uid + '/xray-config', t('xray_copied'));
 }}
 
 function toast(msg, err) {{
@@ -7953,7 +7968,7 @@ example.com
         <div class="fg"><label class="fl">Random Path</label><div class="toggle" id="random-create" onclick="this.classList.toggle('on')"></div></div>
         <div class="fg"><label class="fl">SMUX</label><div class="toggle" id="smux-create" onclick="this.classList.toggle('on')"></div></div>
         <div class="fg"><label class="fl">IP Limit</label><input class="fi" type="number" id="aip-limit" min="0" value="0" placeholder="0 = Unlimited"></div>
-                <div class="fg"><label class="fl">Protocol</label>
+        <div class="fg"><label class="fl">Protocol</label>
           <select class="fs" id="aprotocol">
             <option value="vless-ws">VLESS + WS</option>
             <option value="xhttp-packet-up">XHTTP Packet-Up</option>
@@ -7975,6 +7990,14 @@ example.com
           <input type="hidden" id="aalpn" value="http/1.1">
         </div>
         <div class="fg"><label class="fl">Port</label><input class="fi" type="number" id="aport" min="1" max="65535" value="443"></div>
+        <div class="fg"><label class="fl">Xray DNS Mode</label>
+        <select class="fs" id="xray-dns-mode-create">
+        <option value="doh">DoH (DNS over HTTPS)</option>
+        <option value="fakedns">FakeDNS</option>
+        <option value="direct">Direct (system)</option>
+        </select></div>
+        <div class="fg"><label class="fl">DoH URL (if DoH selected)</label><input class="fi" id="xray-doh-url-create" placeholder="https://cloudflare-dns.com/dns-query"></div>
+        <div class="fg"><label class="fl">Allowed Domains (one per line)</label><textarea class="fi" id="xray-allowed-domains-create" rows="3" placeholder="example.com"></textarea></div>
       </div>
     </div>
     <div class="fg"><label class="fl" data-en="Traffic Limit (GB)" data-fa="محدودیت ترافیک (گیگابایت)">Traffic Limit (GB)</label><input class="fi" type="number" id="nv" min="0" step="0.1" value="0" placeholder="0 = Unlimited"></div>
@@ -8098,6 +8121,14 @@ example.com
           <input type="hidden" id="ealpn" value="http/1.1">
         </div>
         <div class="fg"><label class="fl">Port</label><input class="fi" type="number" id="eport" min="1" max="65535" value="443"></div>
+        <div class="fg"><label class="fl">Xray DNS Mode</label>
+        <select class="fs" id="xray-dns-mode">
+        <option value="doh">DoH (DNS over HTTPS)</option>
+        <option value="fakedns">FakeDNS</option>
+        <option value="direct">Direct (system)</option>
+        </select></div>
+        <div class="fg"><label class="fl">DoH URL (if DoH selected)</label><input class="fi" id="xray-doh-url" placeholder="https://cloudflare-dns.com/dns-query"></div>
+        <div class="fg"><label class="fl">Allowed Domains (one per line)</label><textarea class="fi" id="xray-allowed-domains" rows="3" placeholder="example.com"></textarea></div>
       </div>
     </div>
     <div class="fg"><label class="fl" data-en="Traffic Limit (GB)" data-fa="محدودیت ترافیک (گیگابایت)">Traffic Limit (GB)</label><input class="fi" type="number" id="el" min="0" step="0.1" placeholder="0 = Unlimited"></div>
@@ -8852,59 +8883,126 @@ function switchPage(id){
     loadProxyLines();
   }
 }
-function toast(msg,err=false){const t=$m('toast');t.textContent=msg;t.className='toast'+(err?' err':'')+' show';clearTimeout(t._hide);t._hide=setTimeout(()=>t.classList.remove('show'),3000);}
-function fmtB(b){if(!b||b===0)return'0 B';return b>=1073741824?(b/1073741824).toFixed(2)+' GB':b>=1048576?(b/1048576).toFixed(2)+' MB':(b/1024).toFixed(1)+' KB';}
-function fmtLim(b){if(!b||b===0)return'∞';const g=b/1073741824;return(g%1===0?g.toFixed(0):g.toFixed(1))+' GB';}
-function fmtExp(ea){if(!ea||ea===0)return'∞';const d=new Date(ea)-new Date();if(d<=0)return'Expired';const days=Math.floor(d/86400000);if(days>0)return days+'d';const hours=Math.floor(d/3600000);if(hours>0)return hours+'h';return Math.floor(d/60000)+'m';}
-function setFilter(f,el){cf=f;document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));el.classList.add('active');filterLinks();}
-function filterLinks(){const q=($m('srch')?.value||'').toLowerCase();let r=allLinks;if(cf==='active')r=r.filter(l=>l.active);else if(cf==='off')r=r.filter(l=>!l.active);if(q)r=r.filter(l=>l.label.toLowerCase().includes(q)||l.uuid.toLowerCase().includes(q));renderLinks(r);}
-function renderLinks(links){
-  const tb=$m('ltb'),em=$m('lempty');
-  if(!links||!links.length){tb.innerHTML='';em.style.display='block';return;}
-  em.style.display='none';
-  let tableBuffer = '';
-  links.forEach(l=>{
-    const u=l.used_bytes||0,lim=l.limit_bytes||0,pct=lim>0?Math.min(100,(u/lim)*100):0,col=pct>90?'var(--red)':pct>70?'var(--yellow)':'var(--primary)',ex=fmtExp(l.expires_at),ec=ex==='Expired'?'var(--red)':ex==='∞'?'var(--text3)':'var(--text2)',cc=l.current_connections||0,mc2=l.max_connections||0,check=selectedUids.has(l.uuid)?'checked':'',flagEmoji=l.flag?codeToFlag(l.flag):'',labelDisplay=(flagEmoji?flagEmoji+' ':'')+esc(l.label);
-    tableBuffer += `<tr>
-      <td><input type="checkbox" value="${esc(l.uuid)}" ${check} onchange="toggleSelectUid('${esc(l.uuid)}')"></td>
-      <td data-label="Name" style="font-weight:600">${labelDisplay}</td>
-      <td data-label="Type"><span class="tag tag-vless">VLESS</span></td>
-      <td data-label="Usage" style="white-space:nowrap"><div class="pill"><span class="pill-used">${fmtB(u)}</span><div class="pill-bar"><div class="pill-fill" style="width:${pct}%;background:${col}"></div></div><span>${fmtLim(lim)}</span></div></td>
-      <td data-label="Conns">${cc}/${mc2||'∞'}</td>
-      <td data-label="Expiry" style="color:${ec}">${ex}</td>
-      <td data-label="Status"><span class="tag ${l.active?'tag-on':'tag-off'}">${l.active?t('on'):t('off')}</span></td>
-      <td data-label="Actions" style="min-width:140px;">
-        <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
-          <button class="toggle ${l.active?'on':''}" data-uid="${esc(l.uuid)}" onclick="togLink(this)"></button>
-          <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center;">
-            ${l.label === 'This Server is Free' ? `
-              <span class="tooltip-container"><button class="act-btn act-copy" onclick="cpLink('${esc(l.vless_link)}')">📋</button><span class="tooltip-text">${t('copy')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-sub" onclick="cpSub('${esc(l.uuid)}')">🔗</button><span class="tooltip-text">${t('sub')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyClashLink('${esc(l.uuid)}')">🐱</button><span class="tooltip-text">Copy Clash Link</span></span>
-              <span class="tooltip-container"><button class="act-btn act-clash" onclick="copySingboxLink('${esc(l.uuid)}')">🧩</button><span class="tooltip-text">Copy Sing‑Box Link</span></span>
-              <span class="tooltip-container"><button class="act-btn act-qr" onclick="showQR('${esc(l.vless_link)}')">📷</button><span class="tooltip-text">${t('qr')}</span></span>
-            ` : `
-              <span class="tooltip-container"><button class="act-btn act-edit" onclick="showEditMo('${esc(l.uuid)}')">✏️</button><span class="tooltip-text">${t('edit')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-copy" onclick="cpLink('${esc(l.vless_link)}')">📋</button><span class="tooltip-text">${t('copy')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-sub" onclick="cpSub('${esc(l.uuid)}')">🔗</button><span class="tooltip-text">${t('sub')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyClashLink('${esc(l.uuid)}')">🐱</button><span class="tooltip-text">Copy Clash Link</span></span>
-              <span class="tooltip-container"><button class="act-btn act-clash" onclick="copySingboxLink('${esc(l.uuid)}')">🧩</button><span class="tooltip-text">Copy Sing‑Box Link</span></span>
-              <span class="tooltip-container"><button class="act-btn act-qr" onclick="showQR('${esc(l.vless_link)}')">📷</button><span class="tooltip-text">${t('qr')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-del" onclick="delLink('${esc(l.uuid)}')">🗑️</button><span class="tooltip-text">${t('del')}</span></span>
-              <span class="tooltip-container"><button class="act-btn act-edit" onclick="regenerateUUID('${esc(l.uuid)}')">🔄</button><span class="tooltip-text">Regenerate UUID</span></span>
-              <span class="tooltip-container"><button class="act-btn act-del" onclick="disconnectLink('${esc(l.uuid)}')">🔌</button><span class="tooltip-text">Disconnect All</span></span>
-              <span class="tooltip-container"><button class="act-btn act-sub" onclick="copySubLink('${esc(l.uuid)}')">📎 Sub</button><span class="tooltip-text">Copy Subscription Link</span></span>
-              <span class="tooltip-container"><button class="act-btn act-edit" onclick="cloneLink('${esc(l.uuid)}')">🐑</button><span class="tooltip-text">Clone</span></span>
-            `}
-          </div>
-        </div>
-      </td>
-    </tr>`;
-  });
-  tb.innerHTML = tableBuffer;
+function toast(msg, err = false) {
+    const t = $m('toast');
+    t.textContent = msg;
+    t.className = 'toast' + (err ? ' err' : '') + ' show';
+    clearTimeout(t._hide);
+    t._hide = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function fmtB(b) {
+    if (!b || b === 0) return '0 B';
+    return b >= 1073741824 ? (b / 1073741824).toFixed(2) + ' GB'
+         : b >= 1048576 ? (b / 1048576).toFixed(2) + ' MB'
+         : (b / 1024).toFixed(1) + ' KB';
+}
+
+function fmtLim(b) {
+    if (!b || b === 0) return '∞';
+    const g = b / 1073741824;
+    return (g % 1 === 0 ? g.toFixed(0) : g.toFixed(1)) + ' GB';
+}
+
+function fmtExp(ea) {
+    if (!ea || ea === 0) return '∞';
+    const d = new Date(ea) - new Date();
+    if (d <= 0) return 'Expired';
+    const days = Math.floor(d / 86400000);
+    if (days > 0) return days + 'd';
+    const hours = Math.floor(d / 3600000);
+    if (hours > 0) return hours + 'h';
+    return Math.floor(d / 60000) + 'm';
+}
+
+function setFilter(f, el) {
+    cf = f;
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    filterLinks();
+}
+
+function filterLinks() {
+    const q = ($m('srch')?.value || '').toLowerCase();
+    let r = allLinks;
+    if (cf === 'active') r = r.filter(l => l.active);
+    else if (cf === 'off') r = r.filter(l => !l.active);
+    if (q) r = r.filter(l => l.label.toLowerCase().includes(q) || l.uuid.toLowerCase().includes(q));
+    renderLinks(r);
+}
+
+function copyXrayConfig(uid) {
+    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
+    copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/xray-config');
+}
+
+function renderLinks(links) {
+    const tb = $m('ltb'), em = $m('lempty');
+    if (!links || !links.length) {
+        tb.innerHTML = '';
+        em.style.display = 'block';
+        return;
+    }
+    em.style.display = 'none';
+    let tableBuffer = '';
+    links.forEach(l => {
+        const u = l.used_bytes || 0,
+              lim = l.limit_bytes || 0,
+              pct = lim > 0 ? Math.min(100, (u / lim) * 100) : 0,
+              col = pct > 90 ? 'var(--red)' : pct > 70 ? 'var(--yellow)' : 'var(--primary)',
+              ex = fmtExp(l.expires_at),
+              ec = ex === 'Expired' ? 'var(--red)' : ex === '∞' ? 'var(--text3)' : 'var(--text2)',
+              cc = l.current_connections || 0,
+              mc2 = l.max_connections || 0,
+              check = selectedUids.has(l.uuid) ? 'checked' : '',
+              flagEmoji = l.flag ? codeToFlag(l.flag) : '',
+              labelDisplay = (flagEmoji ? flagEmoji + ' ' : '') + esc(l.label);
+        tableBuffer += `<tr>
+          <td><input type="checkbox" value="${esc(l.uuid)}" ${check} onchange="toggleSelectUid('${esc(l.uuid)}')"></td>
+          <td data-label="Name" style="font-weight:600">${labelDisplay}</td>
+          <td data-label="Type"><span class="tag tag-vless">VLESS</span></td>
+          <td data-label="Usage" style="white-space:nowrap"><div class="pill"><span class="pill-used">${fmtB(u)}</span><div class="pill-bar"><div class="pill-fill" style="width:${pct}%;background:${col}"></div></div><span>${fmtLim(lim)}</span></div></td>
+          <td data-label="Conns">${cc}/${mc2 || '∞'}</td>
+          <td data-label="Expiry" style="color:${ec}">${ex}</td>
+          <td data-label="Status"><span class="tag ${l.active ? 'tag-on' : 'tag-off'}">${l.active ? t('on') : t('off')}</span></td>
+          <td data-label="Actions" style="min-width:140px;">
+            <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
+              <button class="toggle ${l.active ? 'on' : ''}" data-uid="${esc(l.uuid)}" onclick="togLink(this)"></button>
+              <div style="display:flex; flex-wrap:wrap; gap:4px; justify-content:center;">
+                ${l.label === 'This Server is Free' ? `
+                  <span class="tooltip-container"><button class="act-btn act-copy" onclick="cpLink('${esc(l.vless_link)}')">📋</button><span class="tooltip-text">${t('copy')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-sub" onclick="cpSub('${esc(l.uuid)}')">🔗</button><span class="tooltip-text">${t('sub')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyClashLink('${esc(l.uuid)}')">🐱</button><span class="tooltip-text">Copy Clash Link</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copySingboxLink('${esc(l.uuid)}')">🧩</button><span class="tooltip-text">Copy Sing‑Box Link</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-qr" onclick="showQR('${esc(l.vless_link)}')">📷</button><span class="tooltip-text">${t('qr')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyXrayConfig('${esc(l.uuid)}')">⚙️</button><span class="tooltip-text">Xray Config</span></span>
+                ` : `
+                  <span class="tooltip-container"><button class="act-btn act-edit" onclick="showEditMo('${esc(l.uuid)}')">✏️</button><span class="tooltip-text">${t('edit')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-copy" onclick="cpLink('${esc(l.vless_link)}')">📋</button><span class="tooltip-text">${t('copy')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-sub" onclick="cpSub('${esc(l.uuid)}')">🔗</button><span class="tooltip-text">${t('sub')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyClashLink('${esc(l.uuid)}')">🐱</button><span class="tooltip-text">Copy Clash Link</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copySingboxLink('${esc(l.uuid)}')">🧩</button><span class="tooltip-text">Copy Sing‑Box Link</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-qr" onclick="showQR('${esc(l.vless_link)}')">📷</button><span class="tooltip-text">${t('qr')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-del" onclick="delLink('${esc(l.uuid)}')">🗑️</button><span class="tooltip-text">${t('del')}</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-edit" onclick="regenerateUUID('${esc(l.uuid)}')">🔄</button><span class="tooltip-text">Regenerate UUID</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-del" onclick="disconnectLink('${esc(l.uuid)}')">🔌</button><span class="tooltip-text">Disconnect All</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-sub" onclick="copySubLink('${esc(l.uuid)}')">📎 Sub</button><span class="tooltip-text">Copy Subscription Link</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-edit" onclick="cloneLink('${esc(l.uuid)}')">🐑</button><span class="tooltip-text">Clone</span></span>
+                  <span class="tooltip-container"><button class="act-btn act-clash" onclick="copyXrayConfig('${esc(l.uuid)}')">⚙️</button><span class="tooltip-text">Xray Config</span></span>
+                `}
+              </div>
+            </div>
+          </td>
+        </tr>`;
+    });
+    tb.innerHTML = tableBuffer;
 }
 function copySubLink(uid) { const prefix = window.panelPrefix ? '/' + window.panelPrefix : ''; copyToClipboard('https://' + location.host + prefix + '/sub/' + uid); }
 function copyClashLink(uid) { const prefix = window.panelPrefix ? '/' + window.panelPrefix : ''; copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/clash'); }
+function copyXrayConfig(uid) {
+    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
+    copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/xray-config');
+}
 function copySingboxLink(uid) { const prefix = window.panelPrefix ? '/' + window.panelPrefix : ''; copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/singbox'); }
 function toggleSelectUid(uid){selectedUids.has(uid)?selectedUids.delete(uid):selectedUids.add(uid);}
 function toggleSelectAll(){const all=$m('select-all');const boxes=document.querySelectorAll('#ltb input[type=checkbox]');if(all.checked){boxes.forEach(c=>{c.checked=true;selectedUids.add(c.value);});}else{boxes.forEach(c=>{c.checked=false;selectedUids.clear();});}}
@@ -9067,6 +9165,9 @@ async function showEditMo(uid) {
   }
 
   $m('eport').value = l.port || 443;
+  $m('xray-dns-mode').value = l.xray_dns_mode || 'doh';
+  $m('xray-doh-url').value = l.xray_doh_url || '';
+  $m('xray-allowed-domains').value = (l.xray_allowed_domains || '').replace(/,/g, '\n');
 
   const fragMode = l.fragment_mode || 'off';
   $m('efrag-mode').value = fragMode;
@@ -9154,6 +9255,9 @@ async function saveEdit() {
     alpn: alpn,
     port: port,
     proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null
+    xray_dns_mode: xrayDnsMode,
+    xray_doh_url: xrayDohUrl,
+    xray_allowed_domains: xrayAllowedDomains,
   };
   if (days) body.days_valid = days;
 
@@ -10414,6 +10518,8 @@ async function saveGeneralSettings(){
   const subFilename = $m('set-sub-filename').value.trim();
   const panelPrefixVal = $m('set-panel-prefix').value.trim();
 
+  const dohEnabledVal = $m('set-doh-enabled').value;
+
   await saveDohUpstreams();
   try {
     await authenticatedFetch('/api/settings', {
@@ -10427,7 +10533,8 @@ async function saveGeneralSettings(){
         keep_alive_enabled: keepAliveEnabled, keep_alive_mode: keepAliveMode, auto_disable_enabled: autoDisable,
         telegram_report_enabled: tgReport, telegram_notify_enabled: tgNotify,
         stealth_mode: stealthModeVal, landing_redirect: landingRedirect, camouflage_url: camouflageUrl, sub_filename: subFilename,
-        panel_prefix: panelPrefixVal
+        panel_prefix: panelPrefixVal,
+        doh_enabled: dohEnabledVal
       })
     });
     timezoneOffset = parseFloat(tz) || 0;
@@ -10845,6 +10952,11 @@ async function refreshProxyFlagsAndOptions(context) {
     if (btn) btn.disabled = false;
 }
 
+function copyXrayConfig(uid) {
+    const prefix = window.panelPrefix ? '/' + window.panelPrefix : '';
+    copyToClipboard('https://' + location.host + prefix + '/sub/' + uid + '/xray-config');
+}
+
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         document.querySelectorAll('.mo.show').forEach(m => m.classList.remove('show'));
@@ -11022,6 +11134,196 @@ async def test_all_proxy_lines(_=Depends(require_auth)):
         else:
             clean_results.append({"error": "Task failed"})
     return {"results": clean_results}
+
+def build_xray_config(link: dict, proxy_line: dict, request: Request) -> dict:
+    uid = link["uid"]
+    domain = get_domain(request)
+    port = link.get("port", 443)
+
+    proto = link.get("protocol", "vless-ws")
+    if proto == "vless-ws":
+        network_type = "ws"
+    elif proto.startswith("xhttp-"):
+        network_type = "xhttp"
+    else:
+        network_type = "ws"
+
+    path = get_effective_path(link).replace("{uid}", uid)
+    if network_type == "xhttp":
+        base = link.get("custom_path") or DEFAULT_XHTTP_PATH
+        if not base.startswith("/"):
+            base = "/" + base
+        if base.endswith("/"):
+            base = base[:-1]
+        mode = proto.replace("xhttp-", "")
+        if mode not in ("stream-one", "auto"):
+            path = f"{base}/{mode}/{uid}"
+        else:
+            path = base
+    else:
+        if link.get("random_path", False):
+            path = "/" + secrets.token_hex(4) + path
+
+    sni = link.get("custom_sni") or domain
+    host = link.get("custom_host") or domain
+    fingerprint = link.get("fingerprint") or link.get("custom_fp") or "chrome"
+    if not fingerprint or fingerprint.lower() == "none":
+        fingerprint = "chrome"
+    allow_insecure = bool(link.get("allow_insecure", False))
+
+    stream_settings = {
+        "network": network_type,
+        "security": "tls"
+    }
+
+    if network_type == "ws":
+        stream_settings["wsSettings"] = {"host": host, "path": path}
+    elif network_type == "xhttp":
+        mode = proto.replace("xhttp-", "")
+        stream_settings["xhttpSettings"] = {
+            "path": path,
+            "host": host,
+            "mode": mode
+        }
+
+    tls_settings = {
+        "serverName": sni,
+        "fingerprint": fingerprint,
+        "allowInsecure": allow_insecure
+    }
+    if link.get("ech_enabled") and link.get("ech_sni"):
+        tls_settings["ech"] = {"enable": True, "sni": link["ech_sni"]}
+        if link.get("ech_doh"):
+            tls_settings["ech"]["doh"] = link["ech_doh"]
+    stream_settings["tlsSettings"] = tls_settings
+
+    if link.get("fragment"):
+        frag = link["fragment"]
+        if frag == "tlshello":
+            stream_settings["fragment"] = {
+                "packets": "tlshello",
+                "length": "100-200",
+                "interval": link.get("fragment_interval", "10-20")
+            }
+        else:
+            parts = frag.split("-")
+            stream_settings["fragment"] = {
+                "packets": "tlshello",
+                "length": f"{parts[0]}-{parts[1]}" if len(parts) == 2 else "100-200",
+                "interval": link.get("fragment_interval", "10-20")
+            }
+
+    if link.get("smux_enabled"):
+        stream_settings["smuxSettings"] = {
+            "enabled": True,
+            "protocol": "smux",
+            "maxConnections": 5,
+            "minStreams": 4,
+            "maxStreams": 0
+        }
+
+    outbound_settings = {
+        "vnext": [{
+            "address": domain,
+            "port": port,
+            "users": [{"id": uid, "encryption": "none"}]
+        }]
+    }
+
+    config = {
+        "remarks": f"SulgX - {link['label']}",
+        "log": {"loglevel": "warning"},
+        "inbounds": [
+            {
+                "listen": "127.0.0.1",
+                "port": 10808,
+                "protocol": "socks",
+                "settings": {"auth": "noauth", "udp": True},
+                "sniffing": {
+                    "destOverride": ["http", "tls", "quic"],
+                    "enabled": True,
+                    "routeOnly": True
+                },
+                "tag": "mixed-in"
+            }
+        ],
+        "outbounds": [
+            {
+                "protocol": "vless",
+                "settings": outbound_settings,
+                "streamSettings": stream_settings,
+                "tag": "proxy"
+            },
+            {"protocol": "freedom", "settings": {"domainStrategy": "UseIP"}, "tag": "direct"},
+            {"protocol": "blackhole", "settings": {"response": {"type": "http"}}, "tag": "block"}
+        ],
+        "routing": {
+            "domainStrategy": "IPIfNonMatch",
+            "rules": [
+                {"domain": ["geosite:private"], "outboundTag": "direct", "type": "field"},
+                {"ip": ["geoip:private"], "outboundTag": "direct", "type": "field"},
+                {"network": "tcp", "outboundTag": "proxy", "type": "field"},
+                {"network": "udp", "outboundTag": "proxy", "type": "field"}
+            ]
+        }
+    }
+
+    dns_mode = link.get("xray_dns_mode", "doh")
+    if dns_mode == "doh":
+        doh_url = link.get("xray_doh_url") or DOH_UPSTREAMS[0] if DOH_UPSTREAMS else "https://cloudflare-dns.com/dns-query"
+        config["dns"] = {
+            "servers": [{"address": doh_url, "tag": "remote-dns"}],
+            "queryStrategy": "UseIP",
+            "tag": "dns"
+        }
+        config["inbounds"].append({
+            "listen": "127.0.0.1",
+            "port": 10853,
+            "protocol": "dokodemo-door",
+            "settings": {"address": "1.1.1.1", "network": "tcp,udp", "port": 53},
+            "tag": "dns-in"
+        })
+        config["outbounds"].insert(1, {"protocol": "dns", "settings": {"nonIPQuery": "reject"}, "tag": "dns-out"})
+        rules = config["routing"]["rules"]
+        rules.insert(0, {"inboundTag": ["dns-in"], "outboundTag": "dns-out", "type": "field"})
+        rules.insert(1, {"inboundTag": ["mixed-in"], "port": 53, "outboundTag": "dns-out", "type": "field"})
+        rules.insert(2, {"inboundTag": ["remote-dns"], "outboundTag": "proxy", "type": "field"})
+
+    if proxy_line and proxy_line.get("is_active"):
+        proxy_out = {
+            "protocol": proxy_line.get("type", "socks").lower(),
+            "settings": {"servers": [{"address": proxy_line["host"], "port": int(proxy_line["port"])}]},
+            "tag": "proxy-line-out"
+        }
+        if proxy_line.get("username") and proxy_line.get("password"):
+            proxy_out["settings"]["servers"][0]["users"] = [{"user": proxy_line["username"], "pass": proxy_line["password"]}]
+        config["outbounds"].append(proxy_out)
+        if "sockopt" not in config["outbounds"][0]["streamSettings"]:
+            config["outbounds"][0]["streamSettings"]["sockopt"] = {}
+        config["outbounds"][0]["streamSettings"]["sockopt"]["dialerProxy"] = "proxy-line-out"
+
+    return config
+
+
+@app.get("/sub/{uid}/xray-config")
+async def xray_config(uid: str, request: Request):
+    async with LINKS_LOCK:
+        link = LINKS.get(uid)
+    if not link or not link["active"]:
+        raise HTTPException(status_code=404, detail="Link not found or disabled")
+    link = dict(link)
+
+    proxy_line = None
+    if link.get("proxy_line_id"):
+        proxy_row = await db_fetchone(
+            "SELECT * FROM proxy_lines WHERE id = ?",
+            "SELECT * FROM proxy_lines WHERE id = $1",
+            (link["proxy_line_id"],)
+        )
+        proxy_line = dict(proxy_row) if proxy_row else None
+
+    config = build_xray_config(link, proxy_line, request)
+    return JSONResponse(content=config)
 
 # -------------------- Panel HTML endpoints --------------------
 @app.get("/login", response_class=HTMLResponse)
