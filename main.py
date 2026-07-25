@@ -7809,7 +7809,7 @@ example.com
           <label class="fl" style="color:var(--yellow);" data-en="Anti-Abuse & Stealth" data-fa="ضد ابیوز و استتار">Anti-Abuse & Stealth</label>
           <div class="status-cards-grid" style="margin-bottom:10px;">
             <div class="status-glass-card inactive" id="card-stealth" onclick="toggleSettingCard('card-stealth', 'set-stealth-mode')">
-              <span style="font-size:1.5rem;">🥷</span><span data-en="Stealth Mode" data-fa="حالت استتار (مخفی‌سازی اسکنر)">Stealth Mode</span>
+              <span class="status-icon icon-stealth"></span><span data-en="Stealth Mode" data-fa="حالت استتار (مخفی‌سازی اسکنر)">Stealth Mode</span>
               <input type="hidden" id="set-stealth-mode" value="0">
             </div>
           </div>
@@ -7832,19 +7832,19 @@ example.com
           <label class="fl" data-en="System Toggles" data-fa="وضعیت تنظیمات">System Toggles</label>
           <div class="status-cards-grid">
             <div class="status-glass-card active" id="card-log" onclick="toggleSettingCard('card-log', 'set-log-toggle')">
-              <span style="font-size:1.5rem;">📝</span><span data-en="Logs" data-fa="لاگ سیستم">Logs</span>
+              <span class="status-icon icon-logs"></span><span data-en="Logs" data-fa="لاگ سیستم">Logs</span>
               <input type="hidden" id="set-log-toggle" value="1">
             </div>
             <div class="status-glass-card active" id="card-auto" onclick="toggleSettingCard('card-auto', 'set-auto-disable')">
-              <span style="font-size:1.5rem;">🚫</span><span data-en="Auto Disable" data-fa="غیرفعال‌سازی">Auto Disable</span>
+              <span class="status-icon icon-auto-disable"></span><span data-en="Auto Disable" data-fa="غیرفعال‌سازی">Auto Disable</span>
               <input type="hidden" id="set-auto-disable" value="1">
             </div>
             <div class="status-glass-card active" id="card-tgrep" onclick="toggleSettingCard('card-tgrep', 'set-tg-report')">
-              <span style="font-size:1.5rem;">📊</span><span data-en="TG Reports" data-fa="گزارش تلگرام">TG Reports</span>
+              <span class="status-icon icon-tg-reports"></span><span data-en="TG Reports" data-fa="گزارش تلگرام">TG Reports</span>
               <input type="hidden" id="set-tg-report" value="1">
             </div>
             <div class="status-glass-card active" id="card-tgnot" onclick="toggleSettingCard('card-tgnot', 'set-tg-notify')">
-              <span style="font-size:1.5rem;">🔔</span><span data-en="TG Alerts" data-fa="اعلان تلگرام">TG Alerts</span>
+              <span class="status-icon icon-tg-notify"></span><span data-en="TG Alerts" data-fa="اعلان تلگرام">TG Alerts</span>
               <input type="hidden" id="set-tg-notify" value="1">
             </div>
           </div>
@@ -7885,7 +7885,6 @@ example.com
     </div>
   </footer>
 </div>
-<!-- modals -->
 <div class="mo" id="mo-add" onclick="if(event.target===this) this.classList.remove('show')">
   <div class="mo-box">
     <button class="mo-close" onclick="document.getElementById('mo-add').classList.remove('show')">✕</button>
