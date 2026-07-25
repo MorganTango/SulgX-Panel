@@ -11246,7 +11246,9 @@ async def resolve_proxy_flags(request: Request, _=Depends(require_auth)):
     rows = await db_fetchall("SELECT id, host FROM proxy_lines", "SELECT id, host FROM proxy_lines")
     if not rows:
         return {"resolved": 0}
-    sem = asyncio.Semaphore(45) 
+
+    sem = asyncio.Semaphore(5)
+
     async def fetch_flag(proxy_id, host):
         async with sem:
             try:
@@ -11267,9 +11269,13 @@ async def resolve_proxy_flags(request: Request, _=Depends(require_auth)):
                 pass
             return None
 
-    tasks = [fetch_flag(r["id"], r["host"]) for r in rows]
-    results = await asyncio.gather(*tasks)
-    resolved = sum(1 for r in results if r)
+    resolved = 0
+    for r in rows:
+        code = await fetch_flag(r["id"], r["host"])
+        if code:
+            resolved += 1
+        await asyncio.sleep(0.5)
+
     return {"resolved": resolved}
 
 @app.post("/api/proxy-lines/delete-failed")
