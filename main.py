@@ -6224,6 +6224,58 @@ body.blue-mode {
   --halo-color-3: rgba(59, 130, 246, 0.05);
 }
 
+/* ---- icon system (mask-image) base ---- */
+.nav-link .nav-icon,
+.btn-icon .icon,
+.stat-card .stat-icon,
+.status-glass-card .status-icon,
+.header-right .btn-icon .icon {
+  display: inline-block;
+  width: 1.2em; height: 1.2em;
+  background-color: currentColor;
+  mask-size: contain; mask-repeat: no-repeat; mask-position: center;
+  -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center;
+  vertical-align: middle;
+}
+
+.icon {
+  display: inline-block;
+  width: 1.2em; height: 1.2em;
+  background-color: currentColor;
+  mask-size: contain; mask-repeat: no-repeat; mask-position: center;
+  -webkit-mask-size: contain; -webkit-mask-repeat: no-repeat; -webkit-mask-position: center;
+  vertical-align: middle;
+}
+
+/* ---- Specific icon masks ---- */
+.icon-dashboard { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z'/%3E%3Cpolyline points='9 22 9 12 15 12 15 22'/%3E%3C/svg%3E"); }
+.icon-inbounds { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cline x1='12' y1='8' x2='12' y2='16'/%3E%3C/svg%3E"); }
+.icon-cleanip { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71'/%3E%3C/svg%3E"); }
+.icon-scanner { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); }
+.icon-logs { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z'/%3E%3Cpolyline points='14 2 14 8 20 8'/%3E%3Cline x1='16' y1='13' x2='8' y2='13'/%3E%3Cline x1='16' y1='17' x2='8' y2='17'/%3E%3C/svg%3E"); }
+.icon-telegram { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z'/%3E%3C/svg%3E"); }
+.icon-settings { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z'/%3E%3C/svg%3E"); }
+.icon-quick-add { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cline x1='12' y1='5' x2='12' y2='19'/%3E%3Cline x1='5' y1='12' x2='19' y2='12'/%3E%3C/svg%3E"); }
+.icon-theme-dark { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z'/%3E%3C/svg%3E"); }
+.icon-theme-light { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='5'/%3E%3Cline x1='12' y1='1' x2='12' y2='3'/%3E%3Cline x1='12' y1='21' x2='12' y2='23'/%3E%3Cline x1='4.22' y1='4.22' x2='5.64' y2='5.64'/%3E%3Cline x1='18.36' y1='18.36' x2='19.78' y2='19.78'/%3E%3Cline x1='1' y1='12' x2='3' y2='12'/%3E%3Cline x1='21' y1='12' x2='23' y2='12'/%3E%3Cline x1='4.22' y1='19.78' x2='5.64' y2='18.36'/%3E%3Cline x1='18.36' y1='5.64' x2='19.78' y2='4.22'/%3E%3C/svg%3E"); }
+.icon-logout { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4'/%3E%3Cpolyline points='16 17 21 12 16 7'/%3E%3Cline x1='21' y1='12' x2='9' y2='12'/%3E%3C/svg%3E"); }
+.icon-traffic { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.971M15 13l-3 3m0 0l-3-3m3 3V8'/%3E%3C/svg%3E"); }
+.icon-requests { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpolygon points='13 2 3 14 12 14 11 22 21 10 12 10 13 2'/%3E%3C/svg%3E"); }
+.icon-uptime { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolyline points='12 6 12 12 16 14'/%3E%3C/svg%3E"); }
+.icon-disk { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M4 7v10c0 2 2 3.5 8 3.5s8-1.5 8-3.5V7M4 7c0 2 2 3.5 8 3.5s8-1.5 8-3.5M4 7c0-2 2-3.5 8-3.5s8 1.5 8 3.5'/%3E%3C/svg%3E"); }
+.icon-download { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4'/%3E%3Cpolyline points='7 10 12 15 17 10'/%3E%3Cline x1='12' y1='15' x2='12' y2='3'/%3E%3C/svg%3E"); }
+.icon-upload { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E"); }
+.icon-monthly { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E"); }
+.icon-logging { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z'/%3E%3Cpolyline points='14 2 14 8 20 8'/%3E%3C/svg%3E"); }
+.icon-auto-disable { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='4.93' y1='4.93' x2='19.07' y2='19.07'/%3E%3C/svg%3E"); }
+.icon-tg-reports { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'/%3E%3C/svg%3E"); }
+.icon-tg-notify { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9'/%3E%3Cpath d='M13.73 21a2 2 0 01-3.46 0'/%3E%3C/svg%3E"); }
+.icon-bot { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Crect x='3' y='4' width='18' height='14' rx='2'/%3E%3Cline x1='12' y1='18' x2='12' y2='20'/%3E%3Cline x1='8' y1='20' x2='16' y2='20'/%3E%3C/svg%3E"); }
+.icon-stealth { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2'%3E%3Cpath d='M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'/%3E%3C/svg%3E"); }
+.icon-github { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z'/%3E%3C/svg%3E"); }
+.icon-telegram-link { mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M11.944 0A12 12 0 000 12a12 12 0 0012 12 12 12 0 0012-12A12 12 0 0012 0a12 12 0 00-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 01.171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z'/%3E%3C/svg%3E"); }
+
+/* ── base layout ── */
 html, body {
   height: 100%;
   overflow-x: hidden;
@@ -6339,6 +6391,7 @@ a { text-decoration: none; color: inherit; }
   color: #000;
 }
 
+/* ── header ── */
 .header {
   min-height: var(--header-h);
   background: var(--surface);
@@ -6486,6 +6539,7 @@ a { text-decoration: none; color: inherit; }
   border-radius: var(--radius-sm);
 }
 
+/* ── main content ── */
 .main {
   flex: 1;
   min-height: calc(100vh - var(--header-h) - var(--footer-h));
@@ -6517,6 +6571,7 @@ a { text-decoration: none; color: inherit; }
 .page-title[data-fa] { font-family: 'Vazirmatn'; }
 .page-sub { font-size: 1rem; color: var(--text3); margin-top: 6px; }
 
+/* ── stats row ── */
 .stats-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -6573,6 +6628,7 @@ a { text-decoration: none; color: inherit; }
   .stat-val { font-size: 1.4rem; }
 }
 
+/* ── speed card ── */
 .speed-card {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -6590,6 +6646,7 @@ a { text-decoration: none; color: inherit; }
 .speed-item .stat-label { margin-bottom: 0; font-size: 0.8rem; }
 .speed-item .stat-val { font-size: 1.4rem; }
 
+/* ── card ── */
 .card {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -6607,6 +6664,7 @@ a { text-decoration: none; color: inherit; }
 .card-title { font-size: 1.15rem; font-weight: 600; color: var(--text); }
 .chart-container { height: 280px; width: 100%; }
 
+/* ── buttons ── */
 .btn {
   font-family: inherit;
   font-size: 0.88rem;
@@ -6671,6 +6729,7 @@ a { text-decoration: none; color: inherit; }
 }
 .btn-sm { padding: 8px 18px; font-size: 0.78rem; }
 
+/* ── tables ── */
 .tbl-wrap { overflow-x: auto; border-radius: var(--radius-sm); }
 .tbl {
   width: 100%;
@@ -6772,6 +6831,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
   text-align: left;
 }
 
+/* ── tags & pills ── */
 .tag {
   display: inline-flex;
   align-items: center;
@@ -6791,6 +6851,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 .pill-fill { height: 100%; border-radius: 5px; transition: width 0.5s ease; }
 .pill-lim { color: var(--text3); font-size: 0.78rem; }
 
+/* ── toggles ── */
 .toggle {
   width: 52px;
   height: 30px;
@@ -6823,9 +6884,11 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
   background: #fff;
 }
 
+/* ── system bar ── */
 .sys-bar { height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; }
 .sys-fill { height: 100%; border-radius: 6px; transition: width 0.8s ease; }
 
+/* ── status list ── */
 .sl-item {
   display: flex;
   align-items: center;
@@ -6836,6 +6899,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 .sl-k { color: var(--text3); font-size: 0.98rem; }
 .sl-v { color: var(--text); font-weight: 600; font-size: 0.98rem; }
 
+/* ── form groups ── */
 .fg { display: flex; flex-direction: column; gap: 10px; margin-bottom: 26px; }
 .fl {
   font-size: 0.78rem;
@@ -6862,6 +6926,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
   box-shadow: 0 0 0 5px var(--primary-dim);
 }
 
+/* ── action buttons ── */
 .act-btn {
   font-family: inherit;
   font-size: 0.72rem;
@@ -6884,6 +6949,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 .act-edit { color: var(--yellow); border-color: rgba(251,191,36,0.4); } .act-edit:hover { background: rgba(251,191,36,0.2); }
 .act-del { color: var(--red); border-color: rgba(248,113,113,0.4); } .act-del:hover { background: rgba(248,113,113,0.25); }
 
+/* ── toast ── */
 .toast {
   position: fixed;
   bottom: 40px;
@@ -6907,6 +6973,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
 
+/* ── modals ── */
 .mo {
   position: fixed;
   inset: 0;
@@ -6957,6 +7024,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 .qr-box { text-align: center; padding: 30px; background: var(--surface3); border-radius: var(--radius-md); border: 1px solid var(--border); margin-top: 18px; }
 .qr-box img { max-width: 230px; border-radius: 18px; border: 3px solid var(--border); box-shadow: var(--shadow); }
 
+/* ── footer ── */
 .footer {
   height: var(--footer-h);
   display: flex;
@@ -6974,6 +7042,7 @@ body[dir="rtl"] #login-logs-table td:nth-child(2) {
 .footer-inner a:hover { text-shadow: 0 0 18px var(--primary); }
 textarea.fi { resize: vertical; min-height: 130px; }
 
+/* ── chips & pill buttons ── */
 .chip {
   padding: 9px 20px;
   border-radius: 14px;
@@ -7007,6 +7076,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 .pill-btn.active { background: var(--primary-glass); color: var(--primary); border-color: var(--primary); box-shadow: 0 0 28px var(--primary-dim); }
 .pill-btn:active { transform: scale(0.97); }
 
+/* ── advanced section ── */
 .adv-toggle {
   cursor: pointer;
   color: var(--primary);
@@ -7031,6 +7101,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
   margin-top: 14px;
 }
 
+/* ── scrollable areas ── */
 .addr-list-scroll {
   max-height: 420px;
   overflow-y: auto;
@@ -7043,6 +7114,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 .logs-table-container { max-height: 480px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .scan-results-container { max-height: 350px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
+/* ── mobile nav ── */
 .mobile-nav {
   display: none;
   position: fixed;
@@ -7071,6 +7143,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 }
 .mobile-nav .nav-item.active { color: var(--primary); background: var(--primary-glass); }
 
+/* ── glass button group ── */
 .glass-btn-group {
   display: flex;
   flex-wrap: wrap;
@@ -7099,6 +7172,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 .glass-btn:hover:not(.active) { background: rgba(255,255,255,0.06); color: var(--text); }
 .glass-btn:active { transform: scale(0.97); }
 
+/* ── status cards ── */
 .status-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -7145,6 +7219,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
   box-shadow: 0 0 24px rgba(168,85,247,0.3);
 }
 
+/* ── tooltips ── */
 .tooltip-container { position: relative; display: inline-flex; }
 .tooltip-text {
   visibility: hidden;
@@ -7169,6 +7244,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 }
 .tooltip-container:hover .tooltip-text { visibility: visible; opacity: 1; transform: translateX(-50%) translateY(-8px); }
 
+/* ── multi panel grid ── */
 .multi-panel-grid { display: flex; flex-wrap: wrap; gap: 20px; }
 .multi-panel-grid .status-glass-card {
   max-width: 400px;
@@ -7180,6 +7256,7 @@ textarea.fi { resize: vertical; min-height: 130px; }
 }
 .multi-panel-grid .status-glass-card > div:first-child { width: 100%; display: flex; flex-direction: column; gap: 16px; }
 
+/* ── scanner location filter ── */
 .scanner-location-filter { margin: 18px 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .scanner-location-filter input {
   flex: 1;
@@ -7339,10 +7416,10 @@ textarea.fi { resize: vertical; min-height: 130px; }
       <div id="login-err" style="color:var(--red);font-size:0.9rem;margin-top:10px;text-align:center;display:none">Invalid password</div>
       <div style="margin-top:20px; text-align:center; display:flex; justify-content:center; gap:20px;">
         <a href="https://github.com/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">
-          <span class="icon-github"></span> GitHub
+          <span class="icon icon-github"></span> GitHub
         </a>
         <a href="https://t.me/SulgX" target="_blank" style="color:var(--text3); text-decoration:none; font-size:0.9rem;">
-          <span class="icon-telegram-link"></span> Telegram
+          <span class="icon icon-telegram-link"></span> Telegram
         </a>
       </div>
     </div>
@@ -7387,18 +7464,18 @@ textarea.fi { resize: vertical; min-height: 130px; }
       </div>
       <div class="header-right">
   <button class="btn-icon" onclick="showQuickAdd()" title="Quick Add" data-en-title="Quick Add" data-fa-title="ساخت سریع">
-    <span class="icon-quick-add"></span>
+    <span class="icon icon-quick-add"></span>
   </button>
   <div class="lang-switch">
     <button class="lang-btn lang-en active" onclick="setLang('en')">EN</button>
     <button class="lang-btn lang-fa" onclick="setLang('fa')">FA</button>
   </div>
   <button class="btn-icon" id="theme-toggle-btn" onclick="toggleTheme()">
-    <span class="icon-theme-dark"></span>
-    <span class="icon-theme-light"></span>
-  </button>
+  <span class="icon icon-theme-dark" id="dark-icon"></span>
+  <span class="icon icon-theme-light hidden" id="light-icon"></span>
+</button>
   <button class="btn-icon btn-danger-icon" onclick="doLogout()" title="Logout" data-en-title="Logout" data-fa-title="خروج">
-    <span class="icon-logout"></span>
+    <span class="icon icon-logout"></span>
   </button>
 </div>
   </header>
@@ -7439,7 +7516,6 @@ textarea.fi { resize: vertical; min-height: 130px; }
           </div>
         </div>
       </div>
-      <!-- Rest of dashboard unchanged (CPU, Memory, Charts, Recent Activity) – no emoji to replace -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
         <div class="card"><div class="card-hd"><span class="card-title" data-en="CPU" data-fa="پردازنده">CPU</span><span id="cpu-v" style="font-weight:700;color:var(--primary);">–%</span></div><div class="sys-bar"><div class="sys-fill" id="cpu-b" style="background:var(--primary);width:0%"></div></div></div>
         <div class="card"><div class="card-hd"><span class="card-title" data-en="Memory" data-fa="حافظه">Memory</span><span id="mem-v" style="font-weight:700;color:var(--green);">–%</span></div><div class="sys-bar"><div class="sys-fill" id="mem-b" style="background:var(--green);width:0%"></div></div></div>
@@ -7787,13 +7863,13 @@ example.com
   </main>
   <nav class="mobile-nav">
     <div class="nav-items">
-      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')"><span class="nav-icon">📊</span><span data-en="Home" data-fa="خانه">Home</span></div>
-      <div class="nav-item" data-page="inbounds" onclick="switchPage('inbounds')"><span class="nav-icon">📡</span><span data-en="Inbound" data-fa="اینباند">Inbound</span></div>
-      <div class="nav-item" data-page="addresses" onclick="switchPage('addresses')"><span class="nav-icon">🔗</span><span data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</span></div>
-      <div class="nav-item" data-page="ipscanner" onclick="switchPage('ipscanner')"><span class="nav-icon">🔍</span><span data-en="Scan" data-fa="اسکن">Scan</span></div>
-      <div class="nav-item" data-page="logs" onclick="switchPage('logs')"><span class="nav-icon">📋</span><span data-en="Logs" data-fa="لاگ">Logs</span></div>
-      <div class="nav-item" data-page="telegram" onclick="switchPage('telegram')"><span class="nav-icon">🤖</span><span data-en="Bot" data-fa="ربات">Bot</span></div>
-      <div class="nav-item" data-page="settings" onclick="switchPage('settings')"><span class="nav-icon">⚙️</span><span data-en="Settings" data-fa="تنظیمات">Settings</span></div>
+      <div class="nav-item active" data-page="dashboard" onclick="switchPage('dashboard')"><span class="icon icon-dashboard"></span><span data-en="Home" data-fa="خانه">Home</span></div>
+      <div class="nav-item" data-page="inbounds" onclick="switchPage('inbounds')"><span class="icon icon-inbounds"></span><span data-en="Inbound" data-fa="اینباند">Inbound</span></div>
+      <div class="nav-item" data-page="addresses" onclick="switchPage('addresses')"><span class="icon icon-cleanip"></span><span data-en="Clean IP" data-fa="آی‌پی تمیز">Clean IP</span></div>
+      <div class="nav-item" data-page="ipscanner" onclick="switchPage('ipscanner')"><span class="icon icon-scanner"></span><span data-en="Scan" data-fa="اسکن">Scan</span></div>
+      <div class="nav-item" data-page="logs" onclick="switchPage('logs')"><span class="icon icon-logs"></span><span data-en="Logs" data-fa="لاگ">Logs</span></div>
+      <div class="nav-item" data-page="telegram" onclick="switchPage('telegram')"><span class="icon icon-telegram"></span><span data-en="Bot" data-fa="ربات">Bot</span></div>
+      <div class="nav-item" data-page="settings" onclick="switchPage('settings')"><span class="icon icon-settings"></span><span data-en="Settings" data-fa="تنظیمات">Settings</span></div>
     </div>
   </nav>
   <footer class="footer">
