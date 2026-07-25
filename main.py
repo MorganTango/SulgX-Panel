@@ -4055,7 +4055,7 @@ async def user_dashboard(uid: str, request: Request):
     clash_url_esc = html.escape(clash_url)
     singbox_url_esc = html.escape(singbox_url)
     qr_url_esc = html.escape(qr_url)
-html_content = f"""<!DOCTYPE html>
+    html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -4338,7 +4338,7 @@ if (dailyData.length > 0) {{
 </body>
 </html>"""
     return HTMLResponse(content=html_content)
-
+    
 @app.get("/user/{uid}/sub")
 @limiter.limit("10/minute")
 async def user_subscription(uid: str, request: Request):
