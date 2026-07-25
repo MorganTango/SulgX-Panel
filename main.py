@@ -9231,6 +9231,10 @@ async function saveEdit() {
     fragment = length;
   }
 
+  const xrayDnsMode = $m('xray-dns-mode').value;
+  const xrayDohUrl = $m('xray-doh-url').value.trim();
+  const xrayAllowedDomains = $m('xray-allowed-domains').value.split('\n').map(l => l.trim()).filter(l => l).join(',');
+
   const body = {
     limit_value: v,
     limit_unit: 'GB',
@@ -9260,7 +9264,7 @@ async function saveEdit() {
     fingerprint: fingerprint,
     alpn: alpn,
     port: port,
-    proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null
+    proxy_line_id: parseInt($m('proxy-line-select-edit').value) || null,
     xray_dns_mode: xrayDnsMode,
     xray_doh_url: xrayDohUrl,
     xray_allowed_domains: xrayAllowedDomains
