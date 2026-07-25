@@ -782,28 +782,18 @@ async def load_initial_data():
         async with LINKS_LOCK:
             LINKS[default_uuid] = default_link
             await db_execute(
-    "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, "
-    "custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, "
-    "tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, "
-    "allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, "
-    "proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) "
-    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-    "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, "
-    "custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, "
-    "tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, "
-    "allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, "
-    "proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) "
-    "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
-    (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
-     "", "", "", "chrome",
-     "#39ff14", "", "", "", "default",
-     0, 0, "", "",
-     "off", "100-200", "10-20",
-     0, 0, 1,
-     0, 0, "vless-ws",
-     "chrome", "", 443, None,
-     1, 0, 0, "doh", "", "")
-)
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO links (uid, label, limit_bytes, used_bytes, max_connections, created_at, active, expires_at, custom_path, custom_sni, custom_host, custom_fp, color, flag, fragment, ip_profile_id, naming_mode, tfo, ech_enabled, ech_sni, ech_doh, fragment_mode, fragment_length, fragment_interval, allow_insecure, random_path, enable_ipv6, smux_enabled, ip_limit, protocol, fingerprint, alpn, port, proxy_line_id, bypass_iran, bypass_china, bypass_russia, xray_dns_mode, xray_doh_url, xray_allowed_domains) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40)",
+                (default_uuid, "This Server is Free", 0, 0, 0, now, 1, None,
+                 "", "", "", "chrome",
+                 "#39ff14", "", "", "", "default",
+                 0, 0, "", "",
+                 "off", "100-200", "10-20",
+                 0, 0, 1,
+                 0, 0, "vless-ws",
+                 "chrome", "", 443, None,
+                 1, 0, 0, "doh", "", ""),
+            )
     total_usage = sum(link.get("used_bytes", 0) for link in LINKS.values())
     stats["total_bytes"] = total_usage
     profiles = await db_fetchall("SELECT * FROM ip_profiles", "SELECT * FROM ip_profiles")
@@ -5153,7 +5143,7 @@ async def scanner_ws(websocket: WebSocket):
             if timeout <= 0: timeout = 4
         except:
             timeout = 4
-        sem = asyncio.Semaphore(20)
+        sem = asyncio.Semaphore(5)
         async def scan_one(item):
             async with sem:
                 ip_str = str(item).strip()
@@ -5183,6 +5173,7 @@ async def scanner_ws(websocket: WebSocket):
                 except Exception:
                     result = {"ip": ip_str, "ok": False, "latency": None}
                 await websocket.send_json(result)
+                await asyncio.sleep(0.3)
         tasks = [asyncio.create_task(scan_one(item)) for item in items]
         await asyncio.gather(*tasks)
         await websocket.send_json({"done": True})
@@ -11066,43 +11057,47 @@ async function importProxiesBulk() {
     }
 }
 
-async function testAllProxies() {
-    const btn = document.querySelector('[onclick="testAllProxies()"]');
-    if (btn) { btn.disabled = true; btn.textContent = 'Testing all...'; }
-    try {
-        const r = await authenticatedFetch('/api/proxy-lines/test-all', {method:'POST'});
-        const d = await r.json();
-        if (d.results) {
-            const resultMap = new Map(d.results.map(res => [res.id, res]));
+async def testAllProxies():
+    btn = document.querySelector('[onclick="testAllProxies()"]')
+    if btn: 
+        btn.disabled = True
+        btn.textContent = 'Testing all...'
+    try:
+        r = await authenticatedFetch('/api/proxy-lines/test-all', {method:'POST'})
+        d = await r.json()
+        if d.results:
+            resultMap = new Map(d.results.map(res => [res.id, res]))
             resultMap.forEach((res, id) => {
-                const statusEl = $m('proxy-status-' + id);
+                const statusEl = document.getElementById('proxy-status-' + id)
                 if (statusEl) {
                     if (res.ok) {
-                        statusEl.innerHTML = `<span style="color:var(--green)">✅ ${res.latency_ms}ms</span>`;
+                        statusEl.innerHTML = `<span style="color:var(--green)">✅ ${res.latency_ms}ms</span>`
                     } else {
-                        statusEl.innerHTML = `<span style="color:var(--red)">❌ ${res.error || 'Failed'}</span>`;
+                        statusEl.innerHTML = `<span style="color:var(--red)">❌ ${res.error || 'Failed'}</span>`
                     }
                 }
-            });
-            const tbody = $m('proxy-lines-tbody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
+            })
+            const tbody = document.getElementById('proxy-lines-tbody')
+            const rows = Array.from(tbody.querySelectorAll('tr'))
             rows.sort((a, b) => {
-                const idA = parseInt(a.id.replace('proxy-row-', ''));
-                const idB = parseInt(b.id.replace('proxy-row-', ''));
-                const resA = resultMap.get(idA) || {};
-                const resB = resultMap.get(idB) || {};
-                const latA = resA.ok ? resA.latency_ms : Infinity;
-                const latB = resB.ok ? resB.latency_ms : Infinity;
-                return latA - latB;
-            });
-            rows.forEach(row => tbody.appendChild(row));
+                const idA = parseInt(a.id.replace('proxy-row-', ''))
+                const idB = parseInt(b.id.replace('proxy-row-', ''))
+                const resA = resultMap.get(idA) || {}
+                const resB = resultMap.get(idB) || {}
+                const latA = resA.ok ? resA.latency_ms : Infinity
+                const latB = resB.ok ? resB.latency_ms : Infinity
+                return latA - latB
+            })
+            rows.forEach(row => tbody.appendChild(row))
         }
-        toast('All proxies tested');
+        toast('All proxies tested')
     } catch(e) {
-        toast('Test all failed', true);
+        toast('Test all failed', true)
     }
-    if (btn) { btn.disabled = false; btn.textContent = 'Test All'; }
-}
+    if (btn) { 
+        btn.disabled = false
+        btn.textContent = 'Test All'
+    }
 async function refreshProxyFlagsAndOptions(context) {
     const btn = document.querySelector(`#mo-${context === 'create' ? 'add' : 'edit'} button[onclick*="refreshProxyFlagsAndOptions"]`);
     if (btn) btn.disabled = true;
@@ -11288,15 +11283,12 @@ async def delete_failed_proxy_lines(_=Depends(require_auth)):
 @app.post("/api/proxy-lines/test-all")
 async def test_all_proxy_lines(_=Depends(require_auth)):
     rows = await db_fetchall("SELECT * FROM proxy_lines", "SELECT * FROM proxy_lines")
-    tasks = [perform_proxy_test(row) for row in rows]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    clean_results = []
-    for res in results:
-        if isinstance(res, dict):
-            clean_results.append(res)
-        else:
-            clean_results.append({"error": "Task failed"})
-    return {"results": clean_results}
+    results = []
+    for row in rows:
+        result = await perform_proxy_test(row)
+        results.append(result)
+        await asyncio.sleep(1.5)
+    return {"results": results}
 
 def build_xray_config(link: dict, proxy_line: dict, request: Request) -> dict:
     uid = link["uid"]
